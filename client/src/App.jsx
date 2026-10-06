@@ -9,6 +9,7 @@ import ExerciseLibraryPage from './components/ExerciseLibraryPage';
 import AttendancePage from './components/AttendancePage';
 import ConsistencyReportPage from './components/ConsistencyReportPage';
 import ProfilePage from './components/ProfilePage';
+import TrainerWorkoutAssignment from './components/TrainerWorkoutAssignment';
 
 function App() {
   const [currentView, setCurrentView] = useState('landing');
@@ -66,8 +67,9 @@ function App() {
         <RegisterPage onNavigate={setCurrentView} onAuthSuccess={handleAuthSuccess} />
       )}
       {currentView === 'dashboard' && (
-        <DashboardPage currentUser={currentUser} onLogout={handleLogout} />
+        <DashboardPage currentUser={currentUser} onLogout={handleLogout} onNavigate={setCurrentView} />
       )}
+      {currentView === 'trainer-workouts' && <TrainerWorkoutAssignment />}
       {currentView === 'workouts' && <WorkoutPlanPage />}
       {currentView === 'exercises' && <ExerciseLibraryPage />}
       {currentView === 'attendance' && <AttendancePage />}

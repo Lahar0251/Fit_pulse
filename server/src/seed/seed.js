@@ -3,6 +3,8 @@ import User from '../models/user.model.js';
 import FitnessProfile from '../models/fitnessProfile.model.js';
 import WorkoutPlan from '../models/workoutPlan.model.js';
 import Attendance from '../models/attendance.model.js';
+import Exercise from '../models/exercise.model.js';
+import { initialExercises } from './exerciseSeeds.js';
 
 export const seedDatabase = async () => {
   try {
@@ -10,7 +12,31 @@ export const seedDatabase = async () => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(demoPassword, salt);
 
-    // 1. Seed Demo Member
+    // 1. Seed Trainer & Admin first
+    let trainer = await User.findOne({ email: 'trainer@fitpulse.local' });
+    if (!trainer) {
+      trainer = await User.create({
+        fullName: 'Marcus Vance',
+        email: 'trainer@fitpulse.local',
+        phone: '9876543211',
+        password: hashedPassword,
+        role: 'trainer',
+      });
+      console.log('🏋️‍♂️ [Seed] Demo trainer created: trainer@fitpulse.local');
+    }
+
+    let admin = await User.findOne({ email: 'admin@fitpulse.local' });
+    if (!admin) {
+      admin = await User.create({
+        fullName: 'FitPulse Admin',
+        email: 'admin@fitpulse.local',
+        phone: '9876543212',
+        password: hashedPassword,
+        role: 'admin',
+      });
+    }
+
+    // 2. Seed Demo Members assigned to Marcus Vance
     let member = await User.findOne({ email: 'member@fitpulse.local' });
     if (!member) {
       member = await User.create({
@@ -19,8 +45,12 @@ export const seedDatabase = async () => {
         phone: '9876543210',
         password: hashedPassword,
         role: 'member',
+        assignedTrainer: trainer._id,
       });
       console.log('👤 [Seed] Demo member created: member@fitpulse.local');
+    } else if (!member.assignedTrainer) {
+      member.assignedTrainer = trainer._id;
+      await member.save();
     }
 
     // Ensure member has fitness profile
@@ -34,6 +64,35 @@ export const seedDatabase = async () => {
         preferredSchedule: 'morning',
       });
       console.log('📋 [Seed] Fitness profile created for Alex Morgan');
+    }
+
+    // Seed Second Member: Sarah Jenkins
+    let member2 = await User.findOne({ email: 'sarah@fitpulse.local' });
+    if (!member2) {
+      member2 = await User.create({
+        fullName: 'Sarah Jenkins',
+        email: 'sarah@fitpulse.local',
+        phone: '9876543213',
+        password: hashedPassword,
+        role: 'member',
+        assignedTrainer: trainer._id,
+      });
+      console.log('👤 [Seed] Demo member created: sarah@fitpulse.local');
+    } else if (!member2.assignedTrainer) {
+      member2.assignedTrainer = trainer._id;
+      await member2.save();
+    }
+
+    let profile2 = await FitnessProfile.findOne({ userId: member2._id });
+    if (!profile2) {
+      profile2 = await FitnessProfile.create({
+        userId: member2._id,
+        fitnessGoal: 'fat_loss',
+        experienceLevel: 'beginner',
+        plannedDaysPerWeek: 3,
+        preferredSchedule: 'evening',
+      });
+      console.log('📋 [Seed] Fitness profile created for Sarah Jenkins');
     }
 
     // Ensure member has workout plan
@@ -141,27 +200,11 @@ export const seedDatabase = async () => {
       }
     }
 
-    // 2. Seed Trainer & Admin
-    let trainer = await User.findOne({ email: 'trainer@fitpulse.local' });
-    if (!trainer) {
-      trainer = await User.create({
-        fullName: 'Marcus Vance',
-        email: 'trainer@fitpulse.local',
-        phone: '9876543211',
-        password: hashedPassword,
-        role: 'trainer',
-      });
-    }
-
-    let admin = await User.findOne({ email: 'admin@fitpulse.local' });
-    if (!admin) {
-      admin = await User.create({
-        fullName: 'FitPulse Admin',
-        email: 'admin@fitpulse.local',
-        phone: '9876543212',
-        password: hashedPassword,
-        role: 'admin',
-      });
+    // 3. Seed Exercises Library in MongoDB
+    const exerciseCount = await Exercise.countDocuments();
+    if (exerciseCount === 0) {
+      await Exercise.insertMany(initialExercises);
+      console.log(`🏋️ [Seed] Loaded ${initialExercises.length} standard exercises into Exercise Library`);
     }
   } catch (err) {
     console.error('[Seed Error]', err.message);

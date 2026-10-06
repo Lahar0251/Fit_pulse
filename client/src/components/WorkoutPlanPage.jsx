@@ -198,8 +198,16 @@ function WorkoutPlanPage() {
             </span>
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Workout Plan</h1>
             <p className="text-xs sm:text-sm text-slate-600 mt-1">
-              {plan?.name || 'Personalized Fitness Routine'} &bull; Structured {daysList.length}-day schedule derived from your fitness profile.
+              {plan?.name || 'Personalized Fitness Routine'} &bull; Structured {daysList.length}-day schedule.
             </p>
+            {plan?.assignedBy && (
+              <div className="mt-2 inline-flex items-center space-x-1.5 px-2.5 py-1 rounded bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800">
+                <svg className="w-3.5 h-3.5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                </svg>
+                <span>Assigned by Trainer: {plan.assignedBy.fullName || 'Trainer Marcus Vance'}</span>
+              </div>
+            )}
           </div>
 
           <button

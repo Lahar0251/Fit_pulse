@@ -3,6 +3,8 @@ import cors from 'cors';
 import healthRoutes from './routes/health.routes.js';
 import authRoutes from './routes/auth.routes.js';
 import memberRoutes from './routes/member.routes.js';
+import exerciseRoutes from './routes/exercise.routes.js';
+import trainerRoutes from './routes/trainer.routes.js';
 
 const app = express();
 
@@ -18,6 +20,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api', healthRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/member', memberRoutes);
+app.use('/api/exercises', exerciseRoutes);
+app.use('/api/trainer', trainerRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {

@@ -1,7 +1,7 @@
 import React from 'react';
 import MemberDashboard from './MemberDashboard';
 
-function DashboardPage({ currentUser, onLogout }) {
+function DashboardPage({ currentUser, onLogout, onNavigate }) {
   if (!currentUser) {
     return null;
   }
@@ -80,10 +80,26 @@ function DashboardPage({ currentUser, onLogout }) {
           </div>
 
           <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
-            <h2 className="text-base font-bold text-slate-900 mb-2">Trainer Console Notice</h2>
-            <p className="text-xs text-slate-600">
-              Trainer role verified. Full client management, workout template builder, and schedule tracker modules will be accessible in subsequent milestone releases.
-            </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded inline-block mb-1">
+                  Active Feature
+                </span>
+                <h2 className="text-lg font-bold text-slate-900">
+                  Member Workout Plan Assignment
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-600 mt-1 max-w-2xl">
+                  Select your assigned members, view their fitness goals and experience levels, build or customize routines (Day, Exercise, Sets, Reps, Rest), and assign plans directly.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onNavigate && onNavigate('trainer-workouts')}
+                className="px-4 py-2.5 text-xs sm:text-sm font-semibold text-white bg-emerald-600 rounded-md hover:bg-emerald-700 transition-colors shadow-xs cursor-pointer self-start sm:self-auto shrink-0"
+              >
+                Open Workout Assignment &rarr;
+              </button>
+            </div>
           </div>
         </div>
       )}

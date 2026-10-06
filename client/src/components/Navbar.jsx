@@ -12,6 +12,18 @@ function Navbar({ currentView, onNavigate, currentUser, onLogout }) {
     { key: 'profile', label: 'Profile' },
   ];
 
+  const trainerNavItems = [
+    { key: 'dashboard', label: 'Dashboard' },
+    { key: 'trainer-workouts', label: 'Workout Assignment' },
+  ];
+
+  const activeNavItems =
+    currentUser?.role === 'trainer'
+      ? trainerNavItems
+      : currentUser?.role === 'member'
+      ? memberNavItems
+      : [];
+
   const handleNavClick = (viewKey) => {
     onNavigate(viewKey);
     setMobileMenuOpen(false);
@@ -30,10 +42,10 @@ function Navbar({ currentView, onNavigate, currentUser, onLogout }) {
           <img src="/logo.svg" alt="FitPulse Logo" className="h-8 sm:h-9 w-auto" />
         </button>
 
-        {/* Center Navigation Links for Authenticated Member */}
-        {currentUser && currentUser.role === 'member' && (
+        {/* Center Navigation Links for Authenticated Member / Trainer */}
+        {currentUser && activeNavItems.length > 0 && (
           <nav className="hidden lg:flex items-center space-x-1">
-            {memberNavItems.map((item) => {
+            {activeNavItems.map((item) => {
               const isActive = currentView === item.key;
               return (
                 <button
@@ -72,7 +84,7 @@ function Navbar({ currentView, onNavigate, currentUser, onLogout }) {
               </button>
 
               {/* Mobile menu hamburger button */}
-              {currentUser.role === 'member' && (
+              {activeNavItems.length > 0 && (
                 <button
                   type="button"
                   onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -126,10 +138,10 @@ function Navbar({ currentView, onNavigate, currentUser, onLogout }) {
         </div>
       </div>
 
-      {/* Mobile Menu Dropdown for Member */}
-      {currentUser && currentUser.role === 'member' && mobileMenuOpen && (
+      {/* Mobile Menu Dropdown */}
+      {currentUser && activeNavItems.length > 0 && mobileMenuOpen && (
         <div className="lg:hidden border-t border-gray-200 bg-white px-4 pt-2 pb-4 space-y-1">
-          {memberNavItems.map((item) => {
+          {activeNavItems.map((item) => {
             const isActive = currentView === item.key;
             return (
               <button

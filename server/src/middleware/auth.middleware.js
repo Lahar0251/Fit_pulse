@@ -30,3 +30,14 @@ export const protect = (req, res, next) => {
     });
   }
 };
+
+export const requireTrainer = (req, res, next) => {
+  if (!req.user || (req.user.role !== 'trainer' && req.user.role !== 'admin')) {
+    return res.status(403).json({
+      status: 'error',
+      message: 'Access denied: Trainer privileges required.',
+    });
+  }
+  next();
+};
+

@@ -31,6 +31,11 @@ const userSchema = new mongoose.Schema(
       default: 'member',
       required: true,
     },
+    assignedTrainer: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
   },
   {
     timestamps: true,

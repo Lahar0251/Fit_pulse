@@ -23,8 +23,8 @@ export const getMemberDashboardData = async (userId) => {
   }
 
   // 2. Fetch or initialize WorkoutPlan
-  let plan = await WorkoutPlan.findOne({ userId, isActive: true });
-  if (!plan || !plan.days || plan.days.length === 0 || !plan.days[0].exercises[0]?.instructions) {
+  let plan = await WorkoutPlan.findOne({ userId, isActive: true }).populate('assignedBy', 'fullName email');
+  if (!plan || !plan.days || plan.days.length === 0) {
     const generated = generateRuleBasedPlan({
       fitnessGoal: profile.fitnessGoal,
       experienceLevel: profile.experienceLevel,
@@ -139,9 +139,9 @@ export const getMemberWorkoutPlan = async (userId) => {
     });
   }
 
-  let plan = await WorkoutPlan.findOne({ userId, isActive: true });
-  // Check if plan needs initial generation or refresh
-  const needsRegen = !plan || !plan.days || plan.days.length === 0 || !plan.days[0].exercises[0]?.instructions;
+  let plan = await WorkoutPlan.findOne({ userId, isActive: true }).populate('assignedBy', 'fullName email');
+  // Check if plan needs initial generation
+  const needsRegen = !plan || !plan.days || plan.days.length === 0;
   if (needsRegen) {
     const generated = generateRuleBasedPlan({
       fitnessGoal: profile.fitnessGoal,
