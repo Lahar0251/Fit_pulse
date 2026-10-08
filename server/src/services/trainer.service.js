@@ -2,28 +2,18 @@ import User from '../models/user.model.js';
 import FitnessProfile from '../models/fitnessProfile.model.js';
 import WorkoutPlan from '../models/workoutPlan.model.js';
 import Attendance from '../models/attendance.model.js';
-import { generateRuleBasedPlan } from './workoutGenerator.service.js';
+import { generateRuleBasedPlan, buildWeeklySchedule, getExerciseImageUrl } from './workoutGenerator.service.js';
+import { calculateConsistencyMetrics } from './member.service.js';
 
 /**
  * Retrieve all trainees assigned to a given trainer
  */
 export const getAssignedMembers = async (trainerId) => {
-  // Find profiles assigned to this trainer
-  let profiles = await FitnessProfile.find({ trainerId });
+  // Find profiles assigned to this trainer - STRICT ISOLATION (PART 18)
+  const profiles = await FitnessProfile.find({ trainerId });
 
-  // If no profiles explicitly linked to trainer, link existing members to trainer
   if (profiles.length === 0) {
-    const allMembers = await User.find({ role: 'member' });
-    if (allMembers.length > 0) {
-      for (const m of allMembers) {
-        await FitnessProfile.findOneAndUpdate(
-          { userId: m._id },
-          { $set: { trainerId } },
-          { upsert: true }
-        );
-      }
-      profiles = await FitnessProfile.find({ trainerId });
-    }
+    return [];
   }
 
   const memberIds = profiles.map((p) => p.userId);
@@ -41,26 +31,34 @@ export const getAssignedMembers = async (trainerId) => {
   });
 
   // Group attendance by userId
-  const attendanceCountMap = new Map();
+  const userAttendancesMap = new Map();
   attendances.forEach((att) => {
     const uId = att.userId.toString();
-    attendanceCountMap.set(uId, (attendanceCountMap.get(uId) || 0) + 1);
+    if (!userAttendancesMap.has(uId)) {
+      userAttendancesMap.set(uId, []);
+    }
+    userAttendancesMap.get(uId).push(att);
   });
-
-  const daysPassed = Math.max(1, now.getDate());
 
   const results = [];
   for (const profile of profiles) {
     const user = userMap.get(profile.userId.toString());
     if (!user) continue;
 
-    const attendedCount = attendanceCountMap.get(profile.userId.toString()) || 0;
+    const userSessions = userAttendancesMap.get(profile.userId.toString()) || [];
+    const attendedCount = userSessions.length;
     const plannedDays = profile.plannedDaysPerWeek || 5;
-    const eligibleDays = Math.max(1, Math.round((daysPassed / 7) * plannedDays));
-    const consistencyPercentage = Math.min(100, Math.round((attendedCount / eligibleDays) * 100));
+    const metrics = calculateConsistencyMetrics({
+      expectedWorkoutDays: plannedDays,
+      targetWorkoutMinutes: 60,
+      sessions: userSessions,
+    });
+    const consistencyPercentage = metrics.consistencyPercentage;
 
     results.push({
       id: user._id,
+      _id: user._id,
+      userId: user._id,
       fullName: user.fullName,
       email: user.email,
       phone: user.phone || '—',
@@ -91,34 +89,32 @@ export const getMemberDetailsForTrainer = async (trainerId, memberId) => {
     throw error;
   }
 
-  // Retrieve or create fitness profile
-  let profile = await FitnessProfile.findOne({ userId: memberId });
+  // Retrieve or create fitness profile - STRICT ISOLATION (PART 18 & 19)
+  const profile = await FitnessProfile.findOne({ userId: memberId, trainerId });
   if (!profile) {
-    profile = await FitnessProfile.create({
-      userId: memberId,
-      trainerId,
-      fitnessGoal: 'muscle_gain',
-      experienceLevel: 'intermediate',
-      plannedDaysPerWeek: 5,
-      preferredSchedule: 'morning',
-    });
-  } else if (!profile.trainerId) {
-    profile.trainerId = trainerId;
-    await profile.save();
+    const error = new Error('Access denied: This member is not assigned to your trainer profile.');
+    error.statusCode = 403;
+    throw error;
   }
 
-  // Retrieve or generate workout plan
-  let plan = await WorkoutPlan.findOne({ userId: memberId, isActive: true });
-  if (!plan || !plan.days || plan.days.length === 0) {
-    const generated = generateRuleBasedPlan({
-      fitnessGoal: profile.fitnessGoal || 'muscle_gain',
-      experienceLevel: profile.experienceLevel || 'intermediate',
-      plannedDaysPerWeek: profile.plannedDaysPerWeek || 5,
-    });
-    plan = await WorkoutPlan.create({
+  // Retrieve member-specific trainer-assigned workout plan (STRICT ISOLATION)
+  let plan = await WorkoutPlan.findOne({
+    userId: memberId,
+    trainerId,
+    planType: 'trainer',
+    isActive: true,
+  });
+
+  if (!plan) {
+    plan = await WorkoutPlan.findOne({
       userId: memberId,
-      ...generated,
+      trainerId,
+      planType: 'trainer',
     });
+    if (plan) {
+      plan.isActive = true;
+      await plan.save();
+    }
   }
 
   // Attendance metrics
@@ -131,11 +127,14 @@ export const getMemberDetailsForTrainer = async (trainerId, memberId) => {
     checkInTime: { $gte: startOfMonth, $lte: endOfMonth },
   }).sort({ checkInTime: -1 });
 
-  const daysPassed = Math.max(1, now.getDate());
   const attendedCount = attendances.length;
   const plannedDays = profile.plannedDaysPerWeek || 5;
-  const eligibleDays = Math.max(1, Math.round((daysPassed / 7) * plannedDays));
-  const consistencyPercentage = Math.min(100, Math.round((attendedCount / eligibleDays) * 100));
+  const metrics = calculateConsistencyMetrics({
+    expectedWorkoutDays: plannedDays,
+    targetWorkoutMinutes: 60,
+    sessions: attendances,
+  });
+  const consistencyPercentage = metrics.consistencyPercentage;
 
   return {
     account: {
@@ -146,9 +145,9 @@ export const getMemberDetailsForTrainer = async (trainerId, memberId) => {
       memberSince: user.createdAt,
     },
     fitness: {
-      age: profile.age || 25,
-      height: profile.height || 175,
-      weight: profile.weight || 72,
+      age: profile.age,
+      height: profile.height,
+      weight: profile.weight,
       fitnessGoal: profile.fitnessGoal || 'muscle_gain',
       experienceLevel: profile.experienceLevel || 'intermediate',
       plannedDaysPerWeek: profile.plannedDaysPerWeek || 5,
@@ -165,31 +164,33 @@ export const getMemberDetailsForTrainer = async (trainerId, memberId) => {
         durationMinutes: a.durationMinutes || 60,
       })),
     },
-    workoutPlan: {
-      id: plan._id,
-      name: plan.name,
-      goal: plan.goal,
-      experienceLevel: plan.experienceLevel,
-      daysPerWeek: plan.daysPerWeek,
-      assignedBy: plan.assignedBy,
-      assignedByName: plan.assignedByName,
-      isCustom: plan.isCustom || Boolean(plan.assignedBy),
-      days: plan.days.map((d) => ({
-        dayNumber: d.dayNumber,
-        dayName: d.dayName,
-        focus: d.focus,
-        isCompleted: d.isCompleted,
-        exercises: (d.exercises || []).map((ex) => ({
-          exerciseName: ex.exerciseName,
-          sets: ex.sets,
-          reps: ex.reps,
-          restSeconds: ex.restSeconds,
-          rest: ex.rest || `${ex.restSeconds || 60}s`,
-          instructions: ex.instructions || '',
-          targetMuscle: ex.targetMuscle || d.focus,
-        })),
-      })),
-    },
+    workoutPlan: (plan && plan.days && plan.days.length > 0)
+      ? {
+          id: plan._id,
+          name: plan.name,
+          goal: plan.goal,
+          experienceLevel: plan.experienceLevel,
+          daysPerWeek: plan.daysPerWeek,
+          assignedBy: plan.assignedBy,
+          assignedByName: plan.assignedByName,
+          isCustom: true,
+          days: plan.days.map((d) => ({
+            dayNumber: d.dayNumber,
+            dayName: d.dayName,
+            focus: d.focus,
+            isCompleted: d.isCompleted,
+            exercises: (d.exercises || []).map((ex) => ({
+              exerciseName: ex.exerciseName,
+              sets: ex.sets,
+              reps: ex.reps,
+              restSeconds: ex.restSeconds,
+              rest: ex.rest || `${ex.restSeconds || 60}s`,
+              instructions: ex.instructions || '',
+              targetMuscle: ex.targetMuscle || d.focus,
+            })),
+          })),
+        }
+      : null,
   };
 };
 
@@ -352,6 +353,7 @@ const formatDaysArray = (daysInput) => {
           rest: ex.rest ? String(ex.rest).trim() : `${ex.restSeconds || 60}s`,
           muscleGroup: ex.muscleGroup || focus,
           instructions: ex.instructions || '',
+          imageUrl: ex.imageUrl || getExerciseImageUrl(ex.exerciseName),
         }))
       : [];
 
@@ -456,6 +458,14 @@ export const assignPlanToMember = async (trainerId, memberId, payload) => {
     throw error;
   }
 
+  // Verify member is assigned to this trainer (PART 18 & 19)
+  const profile = await FitnessProfile.findOne({ userId: memberId, trainerId });
+  if (!profile) {
+    const error = new Error('Access denied: Member is not assigned to your trainer profile.');
+    error.statusCode = 403;
+    throw error;
+  }
+
   const trainer = await User.findById(trainerId);
   const trainerName = trainer ? trainer.fullName : 'Trainer';
 
@@ -493,47 +503,99 @@ export const assignPlanToMember = async (trainerId, memberId, payload) => {
   // Deactivate any currently active plans for this member
   await WorkoutPlan.updateMany({ userId: memberId, isActive: true }, { $set: { isActive: false } });
 
-  // Create new active workout plan linked to this member
-  const newActivePlan = await WorkoutPlan.create({
+  const schedule = buildWeeklySchedule(planSource.days.length, planSource.days);
+
+  // Check if an existing trainer plan document for this member from this trainer exists
+  let assignedPlan = await WorkoutPlan.findOne({
     userId: memberId,
     trainerId,
-    assignedBy: trainerId,
-    assignedByName: trainerName,
-    name: planSource.name,
-    goal: planSource.goal || 'general_fitness',
-    experienceLevel: planSource.experienceLevel || 'intermediate',
-    daysPerWeek: planSource.days.length,
-    isActive: true,
-    isCustom: true,
-    days: planSource.days,
+    planType: 'trainer',
   });
 
-  // Ensure member's fitness profile links to this trainer and updates planned days
+  if (assignedPlan) {
+    assignedPlan.name = planSource.name;
+    assignedPlan.goal = planSource.goal || 'general_fitness';
+    assignedPlan.experienceLevel = planSource.experienceLevel || 'intermediate';
+    assignedPlan.daysPerWeek = planSource.days.length;
+    assignedPlan.days = planSource.days;
+    assignedPlan.weekSchedule = schedule;
+    assignedPlan.assignedBy = trainerId;
+    assignedPlan.assignedByName = trainerName;
+    assignedPlan.planType = 'trainer';
+    assignedPlan.isActive = true;
+    assignedPlan.isCustom = true;
+    await assignedPlan.save();
+  } else {
+    assignedPlan = await WorkoutPlan.create({
+      userId: memberId,
+      trainerId,
+      assignedBy: trainerId,
+      assignedByName: trainerName,
+      name: planSource.name,
+      goal: planSource.goal || 'general_fitness',
+      experienceLevel: planSource.experienceLevel || 'intermediate',
+      daysPerWeek: planSource.days.length,
+      isActive: true,
+      isCustom: true,
+      planType: 'trainer',
+      days: planSource.days,
+      weekSchedule: schedule,
+    });
+  }
+
+  // Ensure member's fitness profile links to this trainer, sets activeWorkoutSource = 'trainer'
   await FitnessProfile.findOneAndUpdate(
     { userId: memberId },
     {
       $set: {
         trainerId,
+        trainerRequested: true,
+        wantsTrainer: true,
+        activeWorkoutSource: 'trainer',
         plannedDaysPerWeek: planSource.days.length,
       },
     },
     { upsert: true }
   );
 
-  return newActivePlan;
+  return assignedPlan;
 };
 
 /**
  * Update the member's currently assigned workout plan directly
  */
 export const updateMemberAssignedPlan = async (trainerId, memberId, updateData) => {
+  // Verify member is assigned to this trainer (PART 18 & 19)
+  const profile = await FitnessProfile.findOne({ userId: memberId, trainerId });
+  if (!profile) {
+    const error = new Error('Access denied: Member is not assigned to your trainer profile.');
+    error.statusCode = 403;
+    throw error;
+  }
+
   const trainer = await User.findById(trainerId);
   const trainerName = trainer ? trainer.fullName : 'Trainer';
 
-  let plan = await WorkoutPlan.findOne({ userId: memberId, isActive: true });
+  const formattedDays = formatDaysArray(updateData.days);
+  const schedule = buildWeeklySchedule(formattedDays.length, formattedDays);
+
+  let plan = await WorkoutPlan.findOne({
+    userId: memberId,
+    trainerId,
+    planType: 'trainer',
+    isActive: true,
+  });
+
+  if (!plan) {
+    plan = await WorkoutPlan.findOne({
+      userId: memberId,
+      trainerId,
+      planType: 'trainer',
+    });
+  }
+
   if (!plan) {
     // If no active plan, create one
-    const formattedDays = formatDaysArray(updateData.days);
     plan = await WorkoutPlan.create({
       userId: memberId,
       trainerId,
@@ -544,27 +606,40 @@ export const updateMemberAssignedPlan = async (trainerId, memberId, updateData) 
       daysPerWeek: formattedDays.length,
       isActive: true,
       isCustom: true,
+      planType: 'trainer',
       days: formattedDays,
+      weekSchedule: schedule,
     });
-    return plan;
+  } else {
+    if (updateData.name && updateData.name.trim()) {
+      plan.name = updateData.name.trim();
+    }
+    if (updateData.goal) {
+      plan.goal = updateData.goal;
+    }
+    plan.days = formattedDays;
+    plan.daysPerWeek = formattedDays.length;
+    plan.weekSchedule = schedule;
+    plan.assignedBy = trainerId;
+    plan.assignedByName = trainerName;
+    plan.planType = 'trainer';
+    plan.isActive = true;
+    plan.isCustom = true;
+    await plan.save();
   }
 
-  if (updateData.name && updateData.name.trim()) {
-    plan.name = updateData.name.trim();
-  }
-  if (updateData.goal) {
-    plan.goal = updateData.goal;
-  }
-  if (updateData.days) {
-    plan.days = formatDaysArray(updateData.days);
-    plan.daysPerWeek = plan.days.length;
-  }
+  // Ensure member's fitness profile is set to activeWorkoutSource: 'trainer'
+  await FitnessProfile.findOneAndUpdate(
+    { userId: memberId },
+    {
+      $set: {
+        trainerId,
+        activeWorkoutSource: 'trainer',
+        plannedDaysPerWeek: formattedDays.length,
+      },
+    }
+  );
 
-  plan.assignedBy = trainerId;
-  plan.assignedByName = trainerName;
-  plan.isCustom = true;
-
-  await plan.save();
   return plan;
 };
 

@@ -9,6 +9,7 @@ import {
   assignPlanToMember as assignWorkoutPlan,
   updateMemberAssignedPlan as modifyMemberAssignedPlan,
 } from '../services/trainer.service.js';
+import { recordSyncEvent } from '../services/sync.service.js';
 
 export const getAssignedMembers = async (req, res, next) => {
   try {
@@ -137,6 +138,11 @@ export const assignPlanToMember = async (req, res, next) => {
   try {
     const { memberId } = req.params;
     const assignedPlan = await assignWorkoutPlan(req.user.id, memberId, req.body);
+    recordSyncEvent(
+      'workoutPlan',
+      { memberId, trainerId: req.user.id },
+      req.headers['x-tab-session-id']
+    );
     return res.status(200).json({
       status: 'success',
       message: 'Workout plan successfully assigned to member',
@@ -157,6 +163,11 @@ export const updateMemberAssignedPlan = async (req, res, next) => {
   try {
     const { memberId } = req.params;
     const updatedPlan = await modifyMemberAssignedPlan(req.user.id, memberId, req.body);
+    recordSyncEvent(
+      'workoutPlan',
+      { memberId, trainerId: req.user.id },
+      req.headers['x-tab-session-id']
+    );
     return res.status(200).json({
       status: 'success',
       message: 'Member workout plan updated successfully',

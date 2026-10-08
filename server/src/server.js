@@ -8,7 +8,7 @@ import { seedDatabase } from './seed/seed.js';
 const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
-  // Start HTTP server immediately
+  // Start HTTP server immediately on configured port
   app.listen(PORT, () => {
     console.log(`[FitPulse Server] Running on http://localhost:${PORT}`);
     console.log(`[FitPulse Server] Health check available at http://localhost:${PORT}/api/health`);

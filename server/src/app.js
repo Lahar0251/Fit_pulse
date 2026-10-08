@@ -5,6 +5,8 @@ import authRoutes from './routes/auth.routes.js';
 import memberRoutes from './routes/member.routes.js';
 import trainerRoutes from './routes/trainer.routes.js';
 import adminRoutes from './routes/admin.routes.js';
+import syncRoutes from './routes/sync.routes.js';
+import { getTodayGymStatus } from './services/schedule.service.js';
 
 const app = express();
 
@@ -16,12 +18,27 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Universal Gym Status Endpoint (PART 11 & 22)
+app.get('/api/gym/status', async (req, res, next) => {
+  try {
+    const queryDate = req.query.date ? new Date(req.query.date) : new Date();
+    const status = await getTodayGymStatus(queryDate);
+    return res.status(200).json({
+      status: 'success',
+      data: status,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Routes
 app.use('/api', healthRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/member', memberRoutes);
 app.use('/api/trainer', trainerRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/sync', syncRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -43,7 +60,7 @@ app.use((req, res) => {
 // Global error handler
 app.use((err, req, res, next) => {
   console.error('[Server Error]', err);
-  res.status(err.status || 500).json({
+  res.status(err.status || err.statusCode || 500).json({
     status: 'error',
     message: err.message || 'Internal Server Error',
   });

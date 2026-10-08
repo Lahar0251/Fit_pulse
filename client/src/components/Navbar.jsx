@@ -20,6 +20,7 @@ function Navbar({ currentView, onNavigate, currentUser, onLogout }) {
   const adminNavItems = [
     { key: 'dashboard', label: 'Admin Center' },
     { key: 'admin-users', label: 'Users' },
+    { key: 'admin-plans', label: 'Membership Plans' },
     { key: 'admin-schedule', label: 'Gym Operating Schedule' },
   ];
 
@@ -77,7 +78,7 @@ function Navbar({ currentView, onNavigate, currentUser, onLogout }) {
         <div className="flex items-center space-x-3">
           {currentUser ? (
             <div className="flex items-center space-x-3">
-              {/* Role Badge: MEMBER */}
+              {/* Role Badge */}
               <span className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-semibold uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200">
                 {currentUser.role || 'MEMBER'}
               </span>
@@ -85,6 +86,7 @@ function Navbar({ currentView, onNavigate, currentUser, onLogout }) {
               {/* Logout Button */}
               <button
                 type="button"
+                id="logout-btn"
                 onClick={onLogout}
                 className="px-3.5 py-1.5 text-xs sm:text-sm font-medium text-slate-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none cursor-pointer"
               >
@@ -166,6 +168,19 @@ function Navbar({ currentView, onNavigate, currentUser, onLogout }) {
               </button>
             );
           })}
+          <div className="pt-2 border-t border-gray-100">
+            <button
+              type="button"
+              id="mobile-logout-btn"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                onLogout();
+              }}
+              className="w-full text-left px-3 py-2 rounded-md text-sm font-medium text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+            >
+              Logout
+            </button>
+          </div>
         </div>
       )}
     </header>

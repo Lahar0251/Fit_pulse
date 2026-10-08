@@ -3,17 +3,25 @@ import mongoose from 'mongoose';
 const fitnessProfileSchema = new mongoose.Schema(
   {
     userId: {
-      type: mongoose.Schema.Types.Mixed,
+      type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
       unique: true,
       index: true,
     },
     trainerId: {
-      type: mongoose.Schema.Types.Mixed,
+      type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       default: null,
       index: true,
+    },
+    trainerRequested: {
+      type: Boolean,
+      default: false,
+    },
+    wantsTrainer: {
+      type: Boolean,
+      default: false,
     },
     age: {
       type: Number,
@@ -41,10 +49,38 @@ const fitnessProfileSchema = new mongoose.Schema(
     },
     experienceLevel: {
       type: String,
-      enum: ['beginner', 'intermediate', 'advanced'],
-      default: 'intermediate',
+      enum: ['beginner', 'intermediate', 'advanced', 'pro'],
+      default: 'beginner',
       required: true,
     },
+    initialLevel: {
+      type: String,
+      enum: ['beginner', 'intermediate', 'advanced', 'pro'],
+      default: 'beginner',
+    },
+    currentLevel: {
+      type: String,
+      enum: ['beginner', 'intermediate', 'advanced', 'pro'],
+      default: 'beginner',
+    },
+    levelSince: {
+      type: Date,
+      default: Date.now,
+    },
+    promotionHistory: [
+      {
+        from: { type: String },
+        to: { type: String },
+        date: { type: Date, default: Date.now },
+        reason: { type: String, default: 'Sustained workout consistency' },
+      },
+    ],
+    monthlyHistory: [
+      {
+        yearMonth: { type: String },
+        consistencyPercentage: { type: Number, default: 0 },
+      },
+    ],
     plannedDaysPerWeek: {
       type: Number,
       default: 5,
@@ -52,22 +88,45 @@ const fitnessProfileSchema = new mongoose.Schema(
       max: 7,
       required: true,
     },
+    activeWorkoutSource: {
+      type: String,
+      enum: ['recommended', 'custom', 'trainer'],
+      default: 'recommended',
+    },
+    previousPersonalSource: {
+      type: String,
+      enum: ['recommended', 'custom'],
+      default: 'recommended',
+    },
     preferredSchedule: {
       type: String,
       default: 'morning',
     },
+    membershipPlanId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'MembershipPlan',
+      default: null,
+    },
     membershipPlan: {
       type: String,
-      default: 'FitPulse Annual Pro',
+      default: null,
     },
     membershipStatus: {
       type: String,
       enum: ['Active', 'Pending', 'Expired', 'Frozen'],
-      default: 'Active',
+      default: 'Pending',
+    },
+    membershipStartDate: {
+      type: Date,
+      default: null,
     },
     membershipExpiry: {
       type: Date,
-      default: () => new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      default: null,
+    },
+    accumulatedDurationMonths: {
+      type: Number,
+      default: 0,
     },
   },
   {

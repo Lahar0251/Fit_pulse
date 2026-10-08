@@ -65,6 +65,57 @@ const workoutDaySchema = new mongoose.Schema({
   exercises: [exerciseItemSchema],
 });
 
+const weekScheduleItemSchema = new mongoose.Schema({
+  dayOfWeek: {
+    type: String, // 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
+    required: true,
+  },
+  dayIndex: {
+    type: Number, // 0 = Mon, ..., 6 = Sun
+    required: true,
+  },
+  type: {
+    type: String,
+    enum: ['workout', 'rest'],
+    required: true,
+    default: 'workout',
+  },
+  workoutDayNumber: {
+    type: Number,
+    default: null,
+  },
+  workoutDayName: {
+    type: String,
+    default: '',
+  },
+  focus: {
+    type: String,
+    default: '',
+  },
+  status: {
+    type: String,
+    enum: ['scheduled', 'completed', 'missed', 'made_up', 'rest'],
+    default: 'scheduled',
+  },
+  completedAt: {
+    type: Date,
+    default: null,
+  },
+  workoutId: {
+    type: String,
+    default: null,
+  },
+  workoutSource: {
+    type: String,
+    enum: ['recommended', 'custom', 'trainer'],
+    default: 'recommended',
+  },
+  routineDayId: {
+    type: String,
+    default: null,
+  },
+});
+
 const workoutPlanSchema = new mongoose.Schema(
   {
     userId: {
@@ -111,16 +162,26 @@ const workoutPlanSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    planType: {
+      type: String,
+      enum: ['recommended', 'custom', 'trainer'],
+      default: 'recommended',
+    },
     isActive: {
       type: Boolean,
       default: true,
     },
     days: [workoutDaySchema],
+    weekSchedule: [weekScheduleItemSchema],
   },
   {
     timestamps: true,
   }
 );
+
+workoutPlanSchema.index({ userId: 1, planType: 1 });
+workoutPlanSchema.index({ userId: 1, isActive: 1 });
+workoutPlanSchema.index({ userId: 1, trainerId: 1, planType: 1 });
 
 const WorkoutPlan =
   mongoose.models.WorkoutPlan || mongoose.model('WorkoutPlan', workoutPlanSchema);

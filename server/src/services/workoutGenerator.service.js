@@ -175,6 +175,7 @@ export const getPlanTitle = (level, goal, daysCount) => {
     beginner: 'Beginner',
     intermediate: 'Intermediate',
     advanced: 'Advanced',
+    pro: 'Pro',
   };
   const goalNames = {
     muscle_gain: 'Muscle Gain Hypertrophy',
@@ -189,6 +190,108 @@ export const getPlanTitle = (level, goal, daysCount) => {
   return `${lvl} ${g} (${daysCount}-Day Plan)`;
 };
 
+export const DAYS_OF_WEEK = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
+];
+
+export const buildWeeklySchedule = (daysCount, daysList = [], joinDayIndex = null) => {
+  const count = Math.min(7, Math.max(1, Number(daysCount) || (daysList.length > 0 ? daysList.length : 5)));
+  const schedule = [];
+
+  // Determine workout days indices (0 = Monday ... 6 = Sunday)
+  let workoutDayIndices = [];
+  if (joinDayIndex !== null && joinDayIndex !== undefined && Number.isInteger(joinDayIndex) && joinDayIndex >= 0 && joinDayIndex < 7) {
+    // PART 3: Join Date = Day 1 of first workout cycle
+    // Assign count workout slots sequentially starting from joinDayIndex
+    for (let c = 0; c < count; c++) {
+      workoutDayIndices.push((joinDayIndex + c) % 7);
+    }
+  } else {
+    // Standard calendar week distribution
+    if (count === 1) {
+      workoutDayIndices = [0]; // Mon
+    } else if (count === 2) {
+      workoutDayIndices = [0, 3]; // Mon, Thu
+    } else if (count === 3) {
+      workoutDayIndices = [0, 2, 4]; // Mon, Wed, Fri (Wed is Day 2)
+    } else if (count === 4) {
+      workoutDayIndices = [0, 1, 3, 4]; // Mon, Tue, Thu, Fri (Wed, Sat, Sun are Rest Days)
+    } else if (count === 5) {
+      workoutDayIndices = [0, 1, 2, 3, 4]; // Mon, Tue, Wed, Thu, Fri (Sat, Sun are Rest Days)
+    } else if (count === 6) {
+      workoutDayIndices = [0, 1, 2, 3, 4, 5]; // Mon-Sat (Sun is Rest Day)
+    } else {
+      workoutDayIndices = [0, 1, 2, 3, 4, 5, 6]; // All 7 days
+    }
+  }
+
+  // Determine chronological ordering for assigning workout slots 1..count
+  const order = (joinDayIndex !== null && joinDayIndex !== undefined && Number.isInteger(joinDayIndex) && joinDayIndex >= 0 && joinDayIndex < 7)
+    ? Array.from({ length: 7 }, (_, i) => (joinDayIndex + i) % 7)
+    : [0, 1, 2, 3, 4, 5, 6];
+
+  const assignedMap = new Map();
+  let workoutIndexCounter = 0;
+
+  for (const dayIdx of order) {
+    if (workoutDayIndices.includes(dayIdx) && workoutIndexCounter < count) {
+      const assignedDay = daysList[workoutIndexCounter] || {
+        dayNumber: workoutIndexCounter + 1,
+        dayName: `Day ${workoutIndexCounter + 1}`,
+        focus: 'Workout',
+        isCompleted: false,
+      };
+      assignedMap.set(dayIdx, {
+        type: 'workout',
+        workoutDayNumber: assignedDay.dayNumber || workoutIndexCounter + 1,
+        workoutDayName: assignedDay.dayName || `Day ${workoutIndexCounter + 1}`,
+        focus: assignedDay.focus || 'Workout',
+        status: assignedDay.isCompleted ? 'completed' : 'scheduled',
+        completedAt: assignedDay.completedAt || null,
+        workoutId: assignedDay._id ? assignedDay._id.toString() : null,
+        workoutSource: 'recommended',
+      });
+      workoutIndexCounter++;
+    } else {
+      assignedMap.set(dayIdx, {
+        type: 'rest',
+        workoutDayNumber: null,
+        workoutDayName: 'Rest Day',
+        focus: 'Rest & Recovery',
+        status: 'rest',
+        completedAt: null,
+        workoutId: null,
+        workoutSource: 'recommended',
+      });
+    }
+  }
+
+  for (let i = 0; i < 7; i++) {
+    const dayName = DAYS_OF_WEEK[i];
+    const data = assignedMap.get(i);
+    schedule.push({
+      dayOfWeek: dayName,
+      dayIndex: i,
+      type: data.type,
+      workoutDayNumber: data.workoutDayNumber,
+      workoutDayName: data.workoutDayName,
+      focus: data.focus,
+      status: data.status,
+      completedAt: data.completedAt,
+      workoutId: data.workoutId,
+      workoutSource: data.workoutSource,
+    });
+  }
+
+  return schedule;
+};
+
 /**
  * Main Rule-Based Workout Plan Generator
  * 
@@ -201,7 +304,10 @@ export const getPlanTitle = (level, goal, daysCount) => {
  * 6. Strength -> Low reps (5-8), heavy compounds, longer rest (90-120s)
  * 7. Endurance / General -> Higher reps (12-18), dynamic core & balance, 45-60s rest
  */
-export const generateRuleBasedPlan = ({ fitnessGoal = 'muscle_gain', experienceLevel = 'intermediate', plannedDaysPerWeek = 5 }) => {
+export const generateRuleBasedPlan = (
+  { fitnessGoal = 'muscle_gain', experienceLevel = 'intermediate', plannedDaysPerWeek = 5 },
+  joinDayIndex = null
+) => {
   const goal = (fitnessGoal || 'muscle_gain').toLowerCase();
   const level = (experienceLevel || 'intermediate').toLowerCase();
   const daysCount = Math.max(1, Math.min(7, Number(plannedDaysPerWeek) || 5));
@@ -230,8 +336,8 @@ export const generateRuleBasedPlan = ({ fitnessGoal = 'muscle_gain', experienceL
           name: 'Full Body Intro A',
           focus: 'Chest, Quads, Back & Core',
           exercises: [
-            buildItem(EXERCISES.GOBLET_SQUAT, 3, '10-12', 75, 'Stand tall, hold dumbbell securely at chest, squat to parallel.'),
             buildItem(EXERCISES.BENCH_PRESS, 3, '8-10', 90, 'Focus on steady control down to mid-chest before pressing.'),
+            buildItem(EXERCISES.GOBLET_SQUAT, 3, '10-12', 75, 'Stand tall, hold dumbbell securely at chest, squat to parallel.'),
             buildItem(EXERCISES.LAT_PULLDOWN, 3, '10-12', 60, 'Squeeze upper lats at collarbone level with upright torso.'),
             buildItem(EXERCISES.SHOULDER_PRESS, 3, '10-12', 60, 'Smooth overhead press without excessive lumbar arch.'),
             buildItem(EXERCISES.PLANK, 3, '45-60s', 45, 'Brace core firmly and breathe steadily.'),
@@ -693,5 +799,42 @@ export const generateRuleBasedPlan = ({ fitnessGoal = 'muscle_gain', experienceL
     daysPerWeek: daysCount,
     isActive: true,
     days,
+    weekSchedule: buildWeeklySchedule(daysCount, days, joinDayIndex),
   };
 };
+
+/**
+ * Authoritative exercise image resolution helper based on standard FitPulse exercise dictionary
+ * @param {string} exerciseName
+ * @returns {string} Relative asset URL e.g. '/exercises/bench-press.svg'
+ */
+export const getExerciseImageUrl = (exerciseName) => {
+  if (!exerciseName) return '';
+  const clean = String(exerciseName).toLowerCase().trim();
+
+  for (const key of Object.keys(EXERCISES)) {
+    const item = EXERCISES[key];
+    if (item.name.toLowerCase() === clean) {
+      return item.imageUrl;
+    }
+  }
+
+  // Keyword / Substring mapping for variations
+  if (clean.includes('bench') || clean.includes('fly')) return '/exercises/bench-press.svg';
+  if (clean.includes('incline')) return '/exercises/incline-press.svg';
+  if (clean.includes('push-up') || clean.includes('pushup')) return '/exercises/pushup.svg';
+  if (clean.includes('lat pull')) return '/exercises/lat-pulldown.svg';
+  if (clean.includes('row')) return '/exercises/cable-row.svg';
+  if (clean.includes('squat')) return '/exercises/squats.svg';
+  if (clean.includes('deadlift') || clean.includes('rdl')) return '/exercises/deadlift.svg';
+  if (clean.includes('leg press') || clean.includes('calf')) return '/exercises/leg-press.svg';
+  if (clean.includes('lunge')) return '/exercises/lunges.svg';
+  if (clean.includes('shoulder') || clean.includes('overhead')) return '/exercises/shoulder-press.svg';
+  if (clean.includes('lateral')) return '/exercises/lateral-raise.svg';
+  if (clean.includes('curl')) return '/exercises/bicep-curl.svg';
+  if (clean.includes('tricep') || clean.includes('dip')) return '/exercises/tricep-pushdown.svg';
+  if (clean.includes('plank') || clean.includes('knee raise') || clean.includes('climber')) return '/exercises/plank.svg';
+
+  return '';
+};
+

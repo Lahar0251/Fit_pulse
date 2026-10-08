@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import NoticeBanner from './NoticeBanner';
 
 function LoginPage({ onNavigate, onAuthSuccess }) {
   const [email, setEmail] = useState('');
@@ -64,9 +65,12 @@ function LoginPage({ onNavigate, onAuthSuccess }) {
 
           {/* Error Message */}
           {error && (
-            <div className="mb-5 p-3 rounded-md bg-red-50 border border-red-200 text-xs text-red-700">
-              <span className="font-semibold">Authentication Error:</span> {error}
-            </div>
+            <NoticeBanner
+              variant="error"
+              title="Authentication Error"
+              message={error}
+              className="mb-5"
+            />
           )}
 
           {/* Form */}
@@ -118,38 +122,6 @@ function LoginPage({ onNavigate, onAuthSuccess }) {
             </button>
           </form>
 
-          {/* Test Account Helper */}
-          <div className="mt-6 pt-4 border-t border-gray-100">
-            <p className="text-[11px] font-semibold text-slate-500 mb-2 uppercase tracking-wider">
-              Quick Test Credentials:
-            </p>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => fillCredentials('member@fitpulse.com', 'Member@12345!')}
-                className="p-1.5 text-center border border-gray-200 rounded text-[11px] text-slate-700 hover:bg-slate-50 cursor-pointer"
-              >
-                <span className="font-semibold block text-emerald-700">Member</span>
-                Demo
-              </button>
-              <button
-                type="button"
-                onClick={() => fillCredentials('trainer@fitpulse.com', 'Trainer@12345!')}
-                className="p-1.5 text-center border border-gray-200 rounded text-[11px] text-slate-700 hover:bg-slate-50 cursor-pointer"
-              >
-                <span className="font-semibold block text-blue-700">Trainer</span>
-                Demo
-              </button>
-              <button
-                type="button"
-                onClick={() => fillCredentials('admin@fitpulse.com', 'Admin@12345!')}
-                className="p-1.5 text-center border border-gray-200 rounded text-[11px] text-slate-700 hover:bg-slate-50 cursor-pointer"
-              >
-                <span className="font-semibold block text-amber-700">Admin</span>
-                Demo
-              </button>
-            </div>
-          </div>
 
           {/* Link to Registration */}
           <div className="mt-4 text-center">

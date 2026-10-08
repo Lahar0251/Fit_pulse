@@ -8,7 +8,7 @@ import {
 
 export const register = async (req, res, next) => {
   try {
-    const { fullName, email, phone, password, confirmPassword } = req.body;
+    const { fullName, email, phone, password, confirmPassword, age, height, weight, fitnessGoal, experienceLevel, plannedDaysPerWeek, preferredSchedule, wantsTrainer, trainerRequested } = req.body;
 
     // Validate required fields
     if (!fullName || !fullName.trim()) {
@@ -33,10 +33,10 @@ export const register = async (req, res, next) => {
       });
     }
 
-    if (!phone || !phone.trim()) {
+    if (!phone || !phone.trim() || !/^\d{10}$/.test(phone.trim())) {
       return res.status(400).json({
         status: 'error',
-        message: 'Phone Number is required',
+        message: 'Phone number must be exactly 10 digits (numbers only)',
       });
     }
 
@@ -77,6 +77,15 @@ export const register = async (req, res, next) => {
       email,
       phone,
       password,
+      age,
+      height,
+      weight,
+      fitnessGoal,
+      experienceLevel,
+      plannedDaysPerWeek,
+      preferredSchedule,
+      wantsTrainer,
+      trainerRequested,
     });
 
     return res.status(201).json({

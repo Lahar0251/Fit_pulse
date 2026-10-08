@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../models/user.model.js';
+import FitnessProfile from '../models/fitnessProfile.model.js';
 import { getDBStatus } from '../config/db.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fitpulse_super_secret_jwt_key_2026';
@@ -49,6 +50,7 @@ const seedDefaultAccounts = async () => {
         phone: seed.phone,
         password: hashedPassword,
         role: seed.role,
+        hasLoggedInBefore: true,
         createdAt: new Date(),
       });
     }
@@ -64,6 +66,7 @@ const seedDefaultAccounts = async () => {
             phone: seed.phone,
             password: hashedPassword,
             role: seed.role,
+            hasLoggedInBefore: true,
           });
         }
       } catch (err) {
@@ -141,7 +144,7 @@ export const generateToken = (user) => {
  * CRITICAL SECURITY:
  * Force role = 'member' on the backend regardless of payload input.
  */
-export const registerMember = async ({ fullName, email, phone, password }) => {
+export const registerMember = async ({ fullName, email, phone, password, age, height, weight, fitnessGoal, experienceLevel, plannedDaysPerWeek, preferredSchedule, wantsTrainer, trainerRequested }) => {
   const normalizedEmail = (email || '').toLowerCase().trim();
 
   // Check duplicate email in Mongo or in-memory
@@ -169,13 +172,35 @@ export const registerMember = async ({ fullName, email, phone, password }) => {
     phone: (phone || '').trim(),
     password: hashedPassword,
     role: 'member', // Hardcoded and non-negotiable
+    hasLoggedInBefore: false, // Newly registered account has never logged in before
   };
 
   let savedUser = null;
 
+  const isTrainerWanted = trainerRequested !== undefined ? Boolean(trainerRequested) : Boolean(wantsTrainer);
+
   if (getDBStatus().isConnected) {
     const newUser = await User.create(userPayload);
     savedUser = newUser.toObject();
+
+    const startLevel = (experienceLevel || 'beginner').toLowerCase();
+    await FitnessProfile.create({
+      userId: savedUser._id,
+      age: age,
+      height: height,
+      weight: weight,
+      fitnessGoal: fitnessGoal || 'muscle_gain',
+      experienceLevel: startLevel,
+      initialLevel: startLevel,
+      currentLevel: startLevel,
+      levelSince: new Date(),
+      promotionHistory: [],
+      monthlyHistory: [],
+      plannedDaysPerWeek: plannedDaysPerWeek || 5,
+      preferredSchedule: preferredSchedule || 'morning',
+      trainerRequested: isTrainerWanted,
+      wantsTrainer: isTrainerWanted,
+    });
   } else {
     savedUser = {
       _id: 'mem_' + Date.now(),
@@ -188,6 +213,8 @@ export const registerMember = async ({ fullName, email, phone, password }) => {
   // Remove password hash from response copy
   const userResponse = { ...savedUser };
   delete userResponse.password;
+  userResponse.hasLoggedInBefore = false;
+  userResponse.isFirstLogin = true;
 
   const token = generateToken(userResponse);
   return { user: userResponse, token };
@@ -223,8 +250,27 @@ export const loginUser = async ({ email, password }) => {
     throw error;
   }
 
+  // Check persistent status before this login
+  const hadLoggedInBefore = Boolean(user.hasLoggedInBefore);
+
+  // If this was the first login, record completion in persistent database
+  if (!hadLoggedInBefore) {
+    if (getDBStatus().isConnected) {
+      await User.updateOne({ _id: user._id }, { hasLoggedInBefore: true });
+    }
+    if (inMemoryUsers.has(normalizedEmail)) {
+      const memUser = inMemoryUsers.get(normalizedEmail);
+      memUser.hasLoggedInBefore = true;
+    }
+  }
+
   const userResponse = { ...user };
   delete userResponse.password;
+  // Return the first-login state for this session:
+  // hadLoggedInBefore = false -> First Login ("Welcome to FitPulse, [Name]!")
+  // hadLoggedInBefore = true -> Subsequent Login ("Welcome back, [Name]!")
+  userResponse.hasLoggedInBefore = hadLoggedInBefore;
+  userResponse.isFirstLogin = !hadLoggedInBefore;
 
   const token = generateToken(userResponse);
   return { user: userResponse, token };

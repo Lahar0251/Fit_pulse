@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import NoticeBanner from './NoticeBanner';
 
 function RegisterPage({ onNavigate, onAuthSuccess }) {
   const [formData, setFormData] = useState({
@@ -7,6 +8,14 @@ function RegisterPage({ onNavigate, onAuthSuccess }) {
     phone: '',
     password: '',
     confirmPassword: '',
+    age: '',
+    height: '',
+    weight: '',
+    fitnessGoal: 'muscle_gain',
+    experienceLevel: 'beginner',
+    plannedDaysPerWeek: 5,
+    preferredSchedule: 'morning',
+    wantsTrainer: 'no',
   });
 
   const [error, setError] = useState(null);
@@ -42,6 +51,11 @@ function RegisterPage({ onNavigate, onAuthSuccess }) {
       return;
     }
 
+    if (!/^\d{10}$/.test(formData.phone.trim())) {
+      setError('Phone number must be exactly 10 digits (numbers only).');
+      return;
+    }
+
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match.');
       return;
@@ -63,6 +77,14 @@ function RegisterPage({ onNavigate, onAuthSuccess }) {
         phone: formData.phone.trim(),
         password: formData.password,
         confirmPassword: formData.confirmPassword,
+        age: Number(formData.age),
+        height: Number(formData.height),
+        weight: Number(formData.weight),
+        fitnessGoal: formData.fitnessGoal,
+        experienceLevel: formData.experienceLevel,
+        plannedDaysPerWeek: Number(formData.plannedDaysPerWeek),
+        preferredSchedule: formData.preferredSchedule,
+        wantsTrainer: formData.wantsTrainer === 'yes',
       };
 
       const res = await fetch('/api/auth/register', {
@@ -104,9 +126,12 @@ function RegisterPage({ onNavigate, onAuthSuccess }) {
 
           {/* Error Alert */}
           {error && (
-            <div className="mb-5 p-3 rounded-md bg-red-50 border border-red-200 text-xs text-red-700">
-              <span className="font-semibold">Error:</span> {error}
-            </div>
+            <NoticeBanner
+              variant="error"
+              title="Registration Error"
+              message={error}
+              className="mb-5"
+            />
           )}
 
           {/* Form */}
@@ -157,9 +182,156 @@ function RegisterPage({ onNavigate, onAuthSuccess }) {
                 required
                 value={formData.phone}
                 onChange={handleChange}
-                placeholder="e.g. 555-0199"
+                placeholder="e.g. 9876543210"
                 className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-md text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
               />
+            </div>
+
+            {/* Age, Height, Weight Grid */}
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label htmlFor="age" className="block text-xs font-semibold text-slate-700 mb-1">
+                  Age <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="age"
+                  name="age"
+                  type="number"
+                  min="14"
+                  max="100"
+                  required
+                  value={formData.age}
+                  onChange={handleChange}
+                  placeholder="25"
+                  className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-md text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="height" className="block text-xs font-semibold text-slate-700 mb-1">
+                  Height (cm) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="height"
+                  name="height"
+                  type="number"
+                  min="50"
+                  max="260"
+                  required
+                  value={formData.height}
+                  onChange={handleChange}
+                  placeholder="175"
+                  className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-md text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="weight" className="block text-xs font-semibold text-slate-700 mb-1">
+                  Weight (kg) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="weight"
+                  name="weight"
+                  type="number"
+                  min="30"
+                  max="300"
+                  required
+                  value={formData.weight}
+                  onChange={handleChange}
+                  placeholder="72"
+                  className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-md text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                />
+              </div>
+            </div>
+
+            {/* Fitness Goal & Experience */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="fitnessGoal" className="block text-xs font-semibold text-slate-700 mb-1">
+                  Fitness Goal <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="fitnessGoal"
+                  name="fitnessGoal"
+                  value={formData.fitnessGoal}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-md text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                >
+                  <option value="muscle_gain">Muscle Gain</option>
+                  <option value="fat_loss">Fat Loss</option>
+                  <option value="strength">Strength</option>
+                  <option value="general_fitness">General Fitness</option>
+                  <option value="endurance">Endurance</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="experienceLevel" className="block text-xs font-semibold text-slate-700 mb-1">
+                  Experience Level <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="experienceLevel"
+                  name="experienceLevel"
+                  value={formData.experienceLevel}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-md text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                >
+                  <option value="beginner">Beginner</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="advanced">Advanced</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Planned Days */}
+            <div>
+              <label htmlFor="plannedDaysPerWeek" className="block text-xs font-semibold text-slate-700 mb-1">
+                Days Per Week <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="plannedDaysPerWeek"
+                name="plannedDaysPerWeek"
+                type="number"
+                min="1"
+                max="7"
+                required
+                value={formData.plannedDaysPerWeek}
+                onChange={handleChange}
+                placeholder="5"
+                className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-md text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+              />
+            </div>
+
+            {/* Schedule & Trainer Preference */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="preferredSchedule" className="block text-xs font-semibold text-slate-700 mb-1">
+                  Preferred Time <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="preferredSchedule"
+                  name="preferredSchedule"
+                  value={formData.preferredSchedule}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-md text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                >
+                  <option value="morning">Morning</option>
+                  <option value="afternoon">Afternoon</option>
+                  <option value="evening">Evening</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="wantsTrainer" className="block text-xs font-semibold text-slate-700 mb-1">
+                  Do you want a trainer? <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="wantsTrainer"
+                  name="wantsTrainer"
+                  value={formData.wantsTrainer}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-md text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                >
+                  <option value="no">No</option>
+                  <option value="yes">Yes</option>
+                </select>
+              </div>
             </div>
 
             {/* Password */}

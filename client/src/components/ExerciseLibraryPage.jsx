@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import ExerciseImage from './ExerciseImage';
 
 const EXERCISE_CATALOG = [
   // Chest
@@ -317,9 +318,11 @@ function ExerciseLibraryPage({ currentUser }) {
       <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <span className="text-xs font-semibold uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded inline-block mb-2">
-              {isTrainer ? 'Trainer Exercise Reference' : 'Knowledge Base'}
-            </span>
+            {isTrainer && (
+              <span className="text-xs font-semibold uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded inline-block mb-2">
+                Trainer Exercise Reference
+              </span>
+            )}
             <h1 className="text-2xl font-bold text-slate-900">Exercise Library</h1>
             <p className="text-xs sm:text-sm text-slate-600 mt-1">
               Explore gym movements, target muscle groups, required equipment, and standard prescribed ranges.
@@ -447,7 +450,14 @@ function ExerciseLibraryPage({ currentUser }) {
                       {idx + 1}
                     </td>
                     <td className="py-3 px-4 font-semibold text-slate-900">
-                      {item.name}
+                      <div className="flex items-center space-x-3">
+                        <ExerciseImage
+                          exercise={item}
+                          name={item.name}
+                          className="w-10 h-10 rounded border border-gray-200 bg-white p-1 object-contain shrink-0"
+                        />
+                        <span>{item.name}</span>
+                      </div>
                     </td>
                     <td className="py-3 px-4">
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">

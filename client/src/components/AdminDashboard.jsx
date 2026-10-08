@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-function AdminDashboard({ currentUser, currentView = 'dashboard', onNavigate }) {
+function AdminDashboard({ currentUser, onNavigate }) {
   const [stats, setStats] = useState({
     totalMembers: 0,
     totalTrainers: 0,
@@ -16,10 +16,11 @@ function AdminDashboard({ currentUser, currentView = 'dashboard', onNavigate }) 
     setLoading(true);
     setError('');
     try {
-      const token = localStorage.getItem('fitpulse_token');
+      const token = sessionStorage.getItem('fitpulse_token') || localStorage.getItem('fitpulse_token');
       const headers = {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        'X-Tab-Session-Id': sessionStorage.getItem('fitpulse_tab_id') || 'tab_main',
       };
 
       // Fetch actual statistics from MongoDB
@@ -114,8 +115,6 @@ function AdminDashboard({ currentUser, currentView = 'dashboard', onNavigate }) 
               <span className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-semibold uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200">
                 Admin Center
               </span>
-              <span className="text-xs text-slate-400">&bull;</span>
-              <span className="text-xs text-slate-500">Live Database Overview</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
               System Overview
@@ -176,8 +175,7 @@ function AdminDashboard({ currentUser, currentView = 'dashboard', onNavigate }) 
         </div>
       </div>
 
-      {/* Section View: Users List (when viewing Users or default overview) */}
-      {(currentView === 'admin-users' || currentView === 'dashboard') && (
+      {/* Section View: Users List */}
         <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between border-b border-gray-100 pb-3">
             <div>
@@ -221,13 +219,12 @@ function AdminDashboard({ currentUser, currentView = 'dashboard', onNavigate }) 
                     <td className="py-2.5 px-3 text-xs text-slate-600">{u.email}</td>
                     <td className="py-2.5 px-3">
                       <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border ${
-                          u.role === 'admin'
-                            ? 'bg-amber-50 text-amber-800 border-amber-200'
-                            : u.role === 'trainer'
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border ${u.role === 'admin'
+                          ? 'bg-amber-50 text-amber-800 border-amber-200'
+                          : u.role === 'trainer'
                             ? 'bg-blue-50 text-blue-800 border-blue-200'
                             : 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                        }`}
+                          }`}
                       >
                         {formatRole(u.role)}
                       </span>
@@ -241,10 +238,49 @@ function AdminDashboard({ currentUser, currentView = 'dashboard', onNavigate }) 
             </table>
           </div>
         </div>
-      )}
+
+      {/* Section View: Membership Plans */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Membership Plans & Pricing</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Administer active subscription packages, rates, and validity periods.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {onNavigate && (
+                <button
+                  type="button"
+                  onClick={() => onNavigate('admin-plans')}
+                  className="text-xs font-semibold px-2.5 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 cursor-pointer transition-colors"
+                >
+                  Manage Plans &rarr;
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="p-4 bg-slate-50 border border-gray-200 rounded-md flex items-center justify-between">
+            <div>
+              <p className="text-sm font-bold text-slate-900">Live Membership Catalog</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Create new plans, adjust INR pricing, change duration, and toggle availability.
+              </p>
+            </div>
+            {onNavigate && (
+              <button
+                type="button"
+                onClick={() => onNavigate('admin-plans')}
+                className="px-3.5 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-md shadow-sm cursor-pointer"
+              >
+                Open Plans Manager
+              </button>
+            )}
+          </div>
+        </div>
+
 
       {/* Section View: Gym Operating Schedule */}
-      {(currentView === 'admin-schedule' || currentView === 'dashboard') && (
         <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between border-b border-gray-100 pb-3">
             <div>
@@ -272,38 +308,41 @@ function AdminDashboard({ currentUser, currentView = 'dashboard', onNavigate }) 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="p-4 bg-slate-50 border border-gray-200 rounded-md">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-1">
-                Open Days ({schedule?.openDays?.length || 6} Days)
+                Facility Availability
               </span>
               <p className="text-sm font-bold text-slate-900">
-                {schedule?.openDays?.join(', ') || 'Monday – Saturday'}
+                7 Days a Week (Mon &ndash; Sun)
               </p>
-              <p className="text-xs text-emerald-700 font-medium mt-1">Full Operations</p>
+              <p className="text-xs text-emerald-700 font-medium mt-1">Full Operations Available</p>
             </div>
 
             <div className="p-4 bg-slate-50 border border-gray-200 rounded-md">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-1">
-                Closed Days ({schedule?.closedDays?.length || 1} Days)
-              </span>
-              <p className="text-sm font-bold text-slate-900">
-                {schedule?.closedDays?.length > 0 ? schedule.closedDays.join(', ') : 'None (Open 7 Days)'}
-              </p>
-              <p className="text-xs text-slate-500 font-medium mt-1">Weekly Facility Rest</p>
-            </div>
-
-            <div className="p-4 bg-slate-50 border border-gray-200 rounded-md">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-1">
-                Operating Hours
+                Standard Facility Hours
               </span>
               <p className="text-sm font-bold text-slate-900">
                 {schedule?.openingTime || '06:00 AM'} &ndash; {schedule?.closingTime || '10:00 PM'}
               </p>
               <p className="text-xs text-slate-500 font-medium mt-1">
-                {schedule?.notes || 'Standard facility schedule'}
+                Configurable per day in Schedule Center
+              </p>
+            </div>
+
+            <div className="p-4 bg-slate-50 border border-gray-200 rounded-md">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-1">
+                Scheduled Closures
+              </span>
+              <p className="text-sm font-bold text-slate-900">
+                {Array.isArray(schedule?.closures) && schedule.closures.length > 0
+                  ? `${schedule.closures.length} Upcoming Closure${schedule.closures.length > 1 ? 's' : ''}`
+                  : '0 Active Closures'}
+              </p>
+              <p className="text-xs text-slate-500 font-medium mt-1">
+                Overrides weekly hours for specific dates
               </p>
             </div>
           </div>
         </div>
-      )}
     </main>
   );
 }

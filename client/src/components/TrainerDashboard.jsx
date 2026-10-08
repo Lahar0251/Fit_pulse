@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import NoticeBanner from './NoticeBanner';
+import ExerciseImage from './ExerciseImage';
 
 function TrainerDashboard({ currentUser }) {
   const [members, setMembers] = useState([]);
+  const [gymStatus, setGymStatus] = useState(null);
+  const [showClosureModal, setShowClosureModal] = useState(false);
+  const [showTomorrowClosureModal, setShowTomorrowClosureModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -66,11 +71,12 @@ function TrainerDashboard({ currentUser }) {
     setLoading(true);
     setError('');
     try {
-      const token = localStorage.getItem('fitpulse_token');
+      const token = sessionStorage.getItem('fitpulse_token') || localStorage.getItem('fitpulse_token');
       const res = await fetch('/api/trainer/members', {
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'X-Tab-Session-Id': sessionStorage.getItem('fitpulse_tab_id') || 'tab_main',
         },
       });
 
@@ -82,6 +88,26 @@ function TrainerDashboard({ currentUser }) {
         }
       } else {
         setError(result.message || 'Failed to load assigned members.');
+      }
+
+      // Fetch live gym operating status in Asia/Kolkata
+      try {
+        const statusRes = await fetch('/api/trainer/gym-status', {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            'X-Tab-Session-Id': sessionStorage.getItem('fitpulse_tab_id') || 'tab_main',
+          },
+        });
+        const statusResult = await statusRes.json();
+        if (statusRes.ok && statusResult.status === 'success' && statusResult.data) {
+          setGymStatus(statusResult.data);
+          if (statusResult.data.isClosure) {
+            setShowClosureModal(true);
+          }
+        }
+      } catch (statusErr) {
+        console.warn('Could not fetch gym status:', statusErr);
       }
     } catch (err) {
       console.error('Failed to fetch assigned members:', err);
@@ -97,11 +123,12 @@ function TrainerDashboard({ currentUser }) {
     setLoadingDetails(true);
     setActiveDayTab(1);
     try {
-      const token = localStorage.getItem('fitpulse_token');
+      const token = sessionStorage.getItem('fitpulse_token') || localStorage.getItem('fitpulse_token');
       const res = await fetch(`/api/trainer/members/${memberId}`, {
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'X-Tab-Session-Id': sessionStorage.getItem('fitpulse_tab_id') || 'tab_main',
         },
       });
 
@@ -122,11 +149,12 @@ function TrainerDashboard({ currentUser }) {
   const fetchTrainerPlans = async () => {
     setLoadingPlans(true);
     try {
-      const token = localStorage.getItem('fitpulse_token');
+      const token = sessionStorage.getItem('fitpulse_token') || localStorage.getItem('fitpulse_token');
       const res = await fetch('/api/trainer/plans', {
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'X-Tab-Session-Id': sessionStorage.getItem('fitpulse_tab_id') || 'tab_main',
         },
       });
 
@@ -330,7 +358,8 @@ function TrainerDashboard({ currentUser }) {
     }
 
     setSavingPlan(true);
-    const token = localStorage.getItem('fitpulse_token');
+    const token = sessionStorage.getItem('fitpulse_token') || localStorage.getItem('fitpulse_token');
+    const tabId = sessionStorage.getItem('fitpulse_tab_id') || 'tab_main';
 
     try {
       if (planModalMode === 'create') {
@@ -339,6 +368,7 @@ function TrainerDashboard({ currentUser }) {
           headers: {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            'X-Tab-Session-Id': tabId,
           },
           body: JSON.stringify(planFormData),
         });
@@ -357,6 +387,7 @@ function TrainerDashboard({ currentUser }) {
           headers: {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            'X-Tab-Session-Id': tabId,
           },
           body: JSON.stringify(planFormData),
         });
@@ -371,6 +402,7 @@ function TrainerDashboard({ currentUser }) {
           headers: {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            'X-Tab-Session-Id': tabId,
           },
           body: JSON.stringify(planFormData),
         });
@@ -397,12 +429,13 @@ function TrainerDashboard({ currentUser }) {
     }
 
     try {
-      const token = localStorage.getItem('fitpulse_token');
+      const token = sessionStorage.getItem('fitpulse_token') || localStorage.getItem('fitpulse_token');
       const res = await fetch(`/api/trainer/plans/${planId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'X-Tab-Session-Id': sessionStorage.getItem('fitpulse_tab_id') || 'tab_main',
         },
       });
       const result = await res.json();
@@ -424,12 +457,13 @@ function TrainerDashboard({ currentUser }) {
     }
 
     try {
-      const token = localStorage.getItem('fitpulse_token');
+      const token = sessionStorage.getItem('fitpulse_token') || localStorage.getItem('fitpulse_token');
       const res = await fetch(`/api/trainer/members/${selectedMemberId}/assign-plan`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'X-Tab-Session-Id': sessionStorage.getItem('fitpulse_tab_id') || 'tab_main',
         },
         body: JSON.stringify({ planId: planIdToAssign }),
       });
@@ -457,105 +491,265 @@ function TrainerDashboard({ currentUser }) {
 
   const selectedMember = members.find((m) => m.id === selectedMemberId);
 
+  const formatClosureDate = (dateStr) => {
+    if (!dateStr) return 'Today';
+    try {
+      const [y, m, d] = dateStr.split('-');
+      const dt = new Date(Number(y), Number(m) - 1, Number(d));
+      return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    } catch {
+      return dateStr;
+    }
+  };
+
   return (
-    <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      {/* Top Banner */}
+    <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 space-y-6">
+      {/* Gym Closure Popup Modal (Today - PART 2 & 14) */}
+      {showClosureModal && gymStatus?.isClosure && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl border border-amber-200 text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center mx-auto text-xl font-bold">
+              !
+            </div>
+            <div>
+              <span className="inline-block px-3 py-0.5 rounded text-xs font-bold uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300 mb-2">
+                GYM CLOSED TODAY
+              </span>
+              <h3 className="text-xl font-extrabold text-slate-900">
+                {formatClosureDate(gymStatus.todayDate)}
+              </h3>
+              <p className="text-sm font-semibold text-amber-800 mt-1">
+                Reason: {gymStatus.reason}
+              </p>
+            </div>
+            <div className="p-3.5 bg-slate-50 border border-gray-200 rounded-lg text-xs text-slate-700 leading-relaxed text-left">
+              <p className="font-medium text-slate-900 mb-1">Message:</p>
+              <p>
+                {gymStatus.announcement ||
+                  `The gym is closed today due to ${gymStatus.reason}. Normal gym timings resume tomorrow.`}
+              </p>
+              <p className="text-[11px] text-slate-500 mt-2 italic">
+                Normal gym timings resume tomorrow. Trainee workouts and physical gym sessions are paused today.
+              </p>
+            </div>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setShowClosureModal(false)}
+                className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-sm transition-colors cursor-pointer"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tomorrow Gym Closure Popup Modal (Advance Notice - PART 3 & 15) */}
+      {showTomorrowClosureModal && gymStatus?.hasTomorrowClosure && !gymStatus?.isClosure && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl border border-amber-200 text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center mx-auto text-xl font-bold">
+              ⚠️
+            </div>
+            <div>
+              <span className="inline-block px-3 py-0.5 rounded text-xs font-bold uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300 mb-2">
+                GYM CLOSED TOMORROW
+              </span>
+              <h3 className="text-xl font-extrabold text-slate-900">
+                {formatClosureDate(gymStatus.tomorrowClosure?.date || gymStatus.nextUpcomingClosure?.date)}
+              </h3>
+              <p className="text-sm font-semibold text-amber-800 mt-1">
+                Reason: {gymStatus.tomorrowClosure?.reason || gymStatus.nextUpcomingClosure?.reason}
+              </p>
+            </div>
+            <div className="p-3.5 bg-slate-50 border border-gray-200 rounded-lg text-xs text-slate-700 leading-relaxed text-left">
+              <p className="font-medium text-slate-900 mb-1">Message:</p>
+              <p>
+                {gymStatus.tomorrowClosure?.announcement ||
+                  `The gym will be closed tomorrow due to ${gymStatus.tomorrowClosure?.reason || 'a scheduled closure'}.`}
+              </p>
+              <p className="text-[11px] text-slate-600 mt-2 font-medium">
+                The gym will be closed tomorrow. In-person trainee sessions must be rescheduled.
+              </p>
+            </div>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setShowTomorrowClosureModal(false)}
+                className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-sm transition-colors cursor-pointer"
+              >
+                Understood
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Active Gym Closure Notice (Today) */}
+      {gymStatus?.isClosure && (
+        <NoticeBanner
+          variant="warning"
+          title={`GYM CLOSED TODAY (${formatClosureDate(gymStatus.todayDate)}) • Reason: ${gymStatus.reason}`}
+          message="Normal gym timings resume tomorrow. Physical training sessions are paused today."
+          secondaryText={gymStatus.announcement ? `Notice: ${gymStatus.announcement}` : null}
+          actionLabel="View Notice"
+          onAction={() => setShowClosureModal(true)}
+        />
+      )}
+
+      {/* Advance Notice: Light Amber Warning Card (Tomorrow) */}
+      {gymStatus?.hasTomorrowClosure && !gymStatus?.isClosure && (
+        <NoticeBanner
+          variant="warning"
+          title={`GYM CLOSED TOMORROW (${formatClosureDate(gymStatus.tomorrowClosure?.date)}) • Reason: ${gymStatus.tomorrowClosure?.reason}`}
+          message="Your gym is closed tomorrow. Trainee workout schedules and in-person sessions should be planned accordingly."
+          secondaryText={gymStatus.tomorrowClosure?.announcement ? `Notice: ${gymStatus.tomorrowClosure.announcement}` : null}
+          actionLabel="View Notice"
+          onAction={() => setShowTomorrowClosureModal(true)}
+        />
+      )}
+
+      {/* Upcoming Future Closure Notice (PART 10 & 23) */}
+      {!gymStatus?.isClosure && !gymStatus?.hasTomorrowClosure && gymStatus?.nextUpcomingClosure && gymStatus.nextUpcomingClosure.daysUntil > 1 && (
+        <NoticeBanner
+          variant="info"
+          title={`UPCOMING GYM CLOSURE (${formatClosureDate(gymStatus.nextUpcomingClosure.date)}) • In ${gymStatus.nextUpcomingClosure.daysUntil} days`}
+          message={`Reason: ${gymStatus.nextUpcomingClosure.reason}`}
+        />
+      )}
+
+      {/* Top Banner (Visually matching Member Welcome Banner) */}
       <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center space-x-2 mb-1.5">
+            <div className="flex items-center space-x-2 mb-2">
               <span className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-semibold uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200">
                 Trainer Portal
               </span>
               <span className="text-xs text-slate-400">&bull;</span>
               <span className="text-xs text-slate-500 font-medium">Instructor Dashboard</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
-              Welcome, {currentUser?.fullName || 'Trainer'}!
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+              Welcome back, {currentUser?.fullName || 'Trainer'}!
             </h1>
             <p className="text-xs sm:text-sm text-slate-600 mt-1">
               Select an assigned member, review their fitness profile, create workout plans, and assign routines.
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleOpenCreatePlan}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold rounded-md shadow-sm transition-colors cursor-pointer"
-            >
-              + Create Workout Plan
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                fetchAssignedMembers();
-                fetchTrainerPlans();
-              }}
-              disabled={loading}
-              className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-semibold rounded-md border border-gray-300 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
-            >
-              Refresh
-            </button>
+          <div className="flex flex-col sm:items-end justify-center">
+            {/* Live Operating Status Badge */}
+            {gymStatus && (
+              <>
+                <span
+                  className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
+                    gymStatus.isClosure
+                      ? 'bg-rose-50 text-rose-800 border-rose-300'
+                      : gymStatus.isOpen
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                      : 'bg-rose-50 text-rose-800 border-rose-300'
+                  }`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full mr-1.5 ${
+                      gymStatus.isClosure
+                        ? 'bg-rose-500'
+                        : gymStatus.isOpen
+                        ? 'bg-emerald-500'
+                        : 'bg-rose-500'
+                    }`}
+                  />
+                  {gymStatus.isClosure ? 'GYM CLOSED TODAY' : `Gym Status: ${gymStatus.status || (gymStatus.isOpen ? 'OPEN' : 'CLOSED')}`}
+                </span>
+                <span className="text-[11px] text-slate-500 mt-1">
+                  {gymStatus.isClosure
+                    ? `Closed Today: ${gymStatus.reason}`
+                    : `Today (${gymStatus.dayOfWeek}): ${gymStatus.openingTime || '06:00 AM'} – ${gymStatus.closingTime || '10:00 PM'}`}
+                </span>
+                {gymStatus.hasTomorrowClosure && !gymStatus.isClosure && (
+                  <span className="text-[11px] font-semibold text-amber-700 mt-0.5">
+                    ⚠️ Tomorrow ({formatClosureDate(gymStatus.tomorrowClosure?.date)}): Closed ({gymStatus.tomorrowClosure?.reason})
+                  </span>
+                )}
+                {!gymStatus.isClosure && !gymStatus.hasTomorrowClosure && gymStatus.nextUpcomingClosure && gymStatus.nextUpcomingClosure.daysUntil > 1 && (
+                  <span className="text-[11px] text-slate-500 mt-0.5">
+                    Upcoming closure: {formatClosureDate(gymStatus.nextUpcomingClosure.date)} (in {gymStatus.nextUpcomingClosure.daysUntil} days)
+                  </span>
+                )}
+              </>
+            )}
+
+            <div className="flex items-center gap-2.5 mt-3">
+              <button
+                type="button"
+                onClick={handleOpenCreatePlan}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold rounded-md shadow-sm transition-colors cursor-pointer"
+              >
+                + Create Workout Plan
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  fetchAssignedMembers();
+                  fetchTrainerPlans();
+                }}
+                disabled={loading}
+                className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-semibold rounded-md border border-gray-300 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Refresh
+              </button>
+            </div>
           </div>
         </div>
+      </div>
 
-        {/* Aggregate Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 pt-6 border-t border-gray-100">
-          <div className="p-4 bg-slate-50 border border-gray-200 rounded-md">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-1">
-              Assigned Trainees
-            </span>
-            <div className="text-2xl font-bold text-slate-900">{totalTrainees} Members</div>
-            <span className="text-[11px] text-slate-500 mt-0.5 block">
-              Active clients under your supervision
-            </span>
-          </div>
+      {/* Aggregate Stats Cards (Matching Member 5-cards presentation) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-1">
+            Assigned Trainees
+          </span>
+          <p className="text-2xl font-bold text-slate-900">{totalTrainees} Members</p>
+          <p className="text-xs text-slate-500 mt-1">Active clients under your supervision</p>
+        </div>
 
-          <div className="p-4 bg-slate-50 border border-gray-200 rounded-md">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-1">
-              Average Adherence
-            </span>
-            <div className="text-2xl font-bold text-emerald-700">{avgConsistency}%</div>
-            <span className="text-[11px] text-slate-500 mt-0.5 block">
-              Based on monthly attendance check-ins
-            </span>
-          </div>
+        <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-1">
+            Average Adherence
+          </span>
+          <p className="text-2xl font-bold text-emerald-700">{avgConsistency}%</p>
+          <p className="text-xs text-slate-500 mt-1">Based on monthly attendance check-ins</p>
+        </div>
 
-          <div className="p-4 bg-slate-50 border border-gray-200 rounded-md">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-1">
-              Workout Plan Library
-            </span>
-            <div className="text-2xl font-bold text-slate-900">{plans.length} Plans</div>
-            <span className="text-[11px] text-slate-500 mt-0.5 block">
-              Available templates ready to assign
-            </span>
-          </div>
+        <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-1">
+            Workout Plan Library
+          </span>
+          <p className="text-2xl font-bold text-slate-900">{plans.length} Plans</p>
+          <p className="text-xs text-slate-500 mt-1">Available templates ready to assign</p>
         </div>
       </div>
 
       {/* Success Notification Banner */}
       {successMessage && (
-        <div className="p-4 bg-emerald-50 text-emerald-900 border border-emerald-300 rounded-md text-sm font-medium flex items-center justify-between">
-          <span>{successMessage}</span>
-          <button
-            type="button"
-            onClick={() => setSuccessMessage('')}
-            className="text-emerald-700 hover:text-emerald-900 font-bold ml-2 cursor-pointer"
-          >
-            &times;
-          </button>
-        </div>
+        <NoticeBanner
+          variant="success"
+          message={successMessage}
+          onClose={() => setSuccessMessage('')}
+        />
       )}
 
       {/* Error alert banner */}
       {error && (
-        <div className="p-4 bg-red-50 text-red-800 border border-red-200 rounded-md text-sm font-medium">
-          {error}
-        </div>
+        <NoticeBanner
+          variant="error"
+          message={error}
+          onClose={() => setError('')}
+        />
       )}
 
-      {/* Section 1: Assigned Trainees Selection Table */}
+      {/* Section 1: Assigned Trainees Selection Table (Matching Member Table Presentation) */}
       <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
         <div className="flex items-center justify-between pb-3 mb-4 border-b border-gray-100">
           <div>
@@ -564,7 +758,7 @@ function TrainerDashboard({ currentUser }) {
               Click on a member below to inspect their fitness profile and assign or customize their workout plan.
             </p>
           </div>
-          <span className="text-xs font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+          <span className="text-xs font-semibold px-2.5 py-1 rounded bg-slate-100 text-slate-700 border border-slate-200">
             {members.length} {members.length === 1 ? 'Member' : 'Members'}
           </span>
         </div>
@@ -575,17 +769,17 @@ function TrainerDashboard({ currentUser }) {
             <p className="text-sm font-semibold text-slate-900">Loading assigned members...</p>
           </div>
         ) : members.length === 0 ? (
-          <div className="py-12 text-center bg-slate-50 border border-gray-200 rounded-md">
-            <p className="text-sm font-semibold text-slate-700">No members currently assigned.</p>
-            <p className="text-xs text-slate-500 mt-1">
+          <div className="py-12 text-center text-xs text-slate-500 bg-slate-50 border border-dashed border-gray-200 rounded-md">
+            <p className="text-sm font-semibold text-slate-700 mb-1">No members currently assigned.</p>
+            <p className="text-xs text-slate-500">
               Members enrolled in personal training programs will appear here.
             </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-sm">
+            <table className="w-full text-left border-collapse text-xs sm:text-sm">
               <thead>
-                <tr className="border-b border-gray-200 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                <tr className="border-b border-gray-200 bg-slate-50 text-slate-600 font-semibold text-xs uppercase tracking-wider">
                   <th className="py-3 px-4">Trainee Name</th>
                   <th className="py-3 px-4">Fitness Goal</th>
                   <th className="py-3 px-4">Experience Level</th>
@@ -594,7 +788,7 @@ function TrainerDashboard({ currentUser }) {
                   <th className="py-3 px-4 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-gray-100 text-slate-800">
                 {members.map((member) => {
                   const isSelected = selectedMemberId === member.id;
                   return (
@@ -603,8 +797,8 @@ function TrainerDashboard({ currentUser }) {
                       onClick={() => selectMember(member.id)}
                       className={`cursor-pointer transition-colors ${
                         isSelected
-                          ? 'bg-emerald-50/90 border-l-4 border-emerald-600'
-                          : 'hover:bg-slate-50'
+                          ? 'bg-emerald-50/70 border-l-4 border-emerald-600 font-medium'
+                          : 'hover:bg-slate-50/60'
                       }`}
                     >
                       <td className="py-3 px-4">
@@ -616,15 +810,15 @@ function TrainerDashboard({ currentUser }) {
                           {formatText(member.fitnessGoal)}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-slate-700 font-medium">
+                      <td className="py-3 px-4 text-slate-700">
                         {formatText(member.experienceLevel)}
                       </td>
-                      <td className="py-3 px-4 text-slate-700 font-medium">
+                      <td className="py-3 px-4 text-slate-700">
                         {member.plannedDaysPerWeek} Days / wk
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
-                          <div className="w-20 bg-gray-200 rounded-full h-2 overflow-hidden">
+                          <div className="w-20 bg-gray-100 border border-gray-200 rounded-full h-2 overflow-hidden">
                             <div
                               className="bg-emerald-600 h-2 rounded-full"
                               style={{ width: `${Math.min(100, member.consistencyPercentage || 0)}%` }}
@@ -642,9 +836,9 @@ function TrainerDashboard({ currentUser }) {
                             e.stopPropagation();
                             selectMember(member.id);
                           }}
-                          className={`px-3 py-1 text-xs font-semibold rounded-md border transition-colors cursor-pointer ${
+                          className={`px-3 py-1 text-xs font-semibold rounded-md border transition-colors cursor-pointer shadow-xs ${
                             isSelected
-                              ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm'
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-bold'
                               : 'bg-white hover:bg-slate-50 text-slate-700 border-gray-300'
                           }`}
                         >
@@ -670,18 +864,18 @@ function TrainerDashboard({ currentUser }) {
             </div>
           ) : selectedDetails ? (
             <>
-              {/* Member Fitness Profile Overview */}
+              {/* Member Fitness Profile Overview (PART 10 - Matching Member White Cards Style) */}
               <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-4 border-b border-gray-100 gap-2">
                   <div>
-                    <span className="text-xs font-semibold uppercase tracking-wider text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded inline-block mb-1">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded inline-block mb-1">
                       2. Member Fitness Profile
                     </span>
                     <h2 className="text-xl font-bold text-slate-900">
                       {selectedDetails.account?.fullName}
                     </h2>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Contact: {selectedDetails.account?.phone} &bull; Email: {selectedDetails.account?.email} &bull; Member since {formatDate(selectedDetails.account?.memberSince)}
+                      Contact: {selectedDetails.account?.phone || 'Not provided'} &bull; Email: {selectedDetails.account?.email} &bull; Member since {formatDate(selectedDetails.account?.memberSince)}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -691,58 +885,64 @@ function TrainerDashboard({ currentUser }) {
                   </div>
                 </div>
 
-                {/* Profile Grid */}
+                {/* Profile Grid (Clean White Stat Cards with Light Gray Borders and Green Accents) */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                  <div className="p-3 bg-slate-50 border border-gray-200 rounded-md">
-                    <span className="text-xs text-slate-500 block">Age</span>
-                    <span className="font-bold text-slate-900 text-sm">
-                      {selectedDetails.fitness?.age || 25} yrs
-                    </span>
+                  <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-xs">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-1">Age</span>
+                    <p className="text-lg font-bold text-slate-900">
+                      {selectedDetails.fitness?.age ? `${selectedDetails.fitness.age} yrs` : '—'}
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Biological age</p>
                   </div>
 
-                  <div className="p-3 bg-slate-50 border border-gray-200 rounded-md">
-                    <span className="text-xs text-slate-500 block">Height</span>
-                    <span className="font-bold text-slate-900 text-sm">
-                      {selectedDetails.fitness?.height || 175} cm
-                    </span>
+                  <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-xs">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-1">Height</span>
+                    <p className="text-lg font-bold text-slate-900">
+                      {selectedDetails.fitness?.height ? `${selectedDetails.fitness.height} cm` : '—'}
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Stature measurement</p>
                   </div>
 
-                  <div className="p-3 bg-slate-50 border border-gray-200 rounded-md">
-                    <span className="text-xs text-slate-500 block">Weight</span>
-                    <span className="font-bold text-slate-900 text-sm">
-                      {selectedDetails.fitness?.weight || 72} kg
-                    </span>
+                  <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-xs">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-1">Weight</span>
+                    <p className="text-lg font-bold text-slate-900">
+                      {selectedDetails.fitness?.weight ? `${selectedDetails.fitness.weight} kg` : '—'}
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Body weight</p>
                   </div>
 
-                  <div className="p-3 bg-slate-50 border border-gray-200 rounded-md">
-                    <span className="text-xs text-slate-500 block">Primary Goal</span>
-                    <span className="font-bold text-emerald-700 text-sm">
+                  <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-xs">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-1">Primary Goal</span>
+                    <p className="text-lg font-bold text-emerald-700 truncate">
                       {formatText(selectedDetails.fitness?.fitnessGoal)}
-                    </span>
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Target objective</p>
                   </div>
 
-                  <div className="p-3 bg-slate-50 border border-gray-200 rounded-md">
-                    <span className="text-xs text-slate-500 block">Experience</span>
-                    <span className="font-bold text-slate-900 text-sm">
+                  <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-xs">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-1">Experience</span>
+                    <p className="text-lg font-bold text-slate-900 truncate">
                       {formatText(selectedDetails.fitness?.experienceLevel)}
-                    </span>
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Classification level</p>
                   </div>
 
-                  <div className="p-3 bg-slate-50 border border-gray-200 rounded-md">
-                    <span className="text-xs text-slate-500 block">Planned Days</span>
-                    <span className="font-bold text-slate-900 text-sm">
-                      {selectedDetails.fitness?.plannedDaysPerWeek} Days / wk
-                    </span>
+                  <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-xs">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-1">Planned Days</span>
+                    <p className="text-lg font-bold text-slate-900">
+                      {selectedDetails.fitness?.plannedDaysPerWeek || 5} Days / wk
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Weekly workout target</p>
                   </div>
                 </div>
               </div>
 
               {/* Active Assigned Workout Plan for Selected Trainee */}
-              <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-4 border-b border-gray-100 gap-3">
+              <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-gray-200 gap-3">
                   <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-semibold uppercase tracking-wider text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded inline-block">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded inline-block">
                         3. Assigned Workout Plan
                       </span>
                       {selectedDetails.workoutPlan?.assignedByName ? (
@@ -755,11 +955,11 @@ function TrainerDashboard({ currentUser }) {
                         </span>
                       )}
                     </div>
-                    <h2 className="text-lg font-bold text-slate-900">
+                    <h2 className="text-xl sm:text-2xl font-bold text-slate-900">
                       {selectedDetails.workoutPlan?.name || 'Assigned Plan'}
                     </h2>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Goal: {formatText(selectedDetails.workoutPlan?.goal)} &bull; {selectedDetails.workoutPlan?.days?.length || 0}-Day Training Split
+                    <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
+                      Goal: <span className="font-semibold text-slate-800">{formatText(selectedDetails.workoutPlan?.goal)}</span> &bull; {selectedDetails.workoutPlan?.days?.length || 0}-Day Training Split
                     </p>
                   </div>
 
@@ -789,10 +989,10 @@ function TrainerDashboard({ currentUser }) {
                   </div>
                 </div>
 
-                {/* Day Tabs */}
+                {/* Day Tabs (PART 5 - Light Green Active State matching Member UI) */}
                 {selectedDetails.workoutPlan?.days && selectedDetails.workoutPlan.days.length > 0 ? (
-                  <div>
-                    <div className="flex items-center space-x-1 border-b border-gray-200 pb-2 overflow-x-auto">
+                  <div className="space-y-4">
+                    <div className="flex items-center space-x-2 border-b border-gray-100 pb-3 overflow-x-auto">
                       {selectedDetails.workoutPlan.days.map((day) => {
                         const isDayActive = activeDayTab === day.dayNumber;
                         return (
@@ -800,10 +1000,10 @@ function TrainerDashboard({ currentUser }) {
                             key={day.dayNumber}
                             type="button"
                             onClick={() => setActiveDayTab(day.dayNumber)}
-                            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                            className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap border ${
                               isDayActive
-                                ? 'bg-emerald-600 text-white shadow-sm'
-                                : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-gray-200'
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-bold shadow-xs ring-1 ring-emerald-400'
+                                : 'bg-white text-slate-700 hover:bg-slate-50 border-gray-200'
                             }`}
                           >
                             Day {day.dayNumber}: {day.dayName.split('(')[0].trim()}
@@ -820,51 +1020,62 @@ function TrainerDashboard({ currentUser }) {
                       if (!day) return null;
 
                       return (
-                        <div className="mt-4 space-y-4">
-                          <div className="p-3.5 bg-slate-50 border border-gray-200 rounded-md flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="space-y-4">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-100 gap-2">
                             <div>
-                              <h3 className="text-sm font-bold text-slate-900">{day.dayName}</h3>
-                              <p className="text-xs text-slate-600 mt-0.5">
-                                Focus: <span className="font-semibold text-emerald-800">{day.focus}</span>
-                              </p>
+                              <div className="flex items-center space-x-2 mb-1">
+                                <span className="text-xs font-bold uppercase tracking-wider text-emerald-700">Day {day.dayNumber}</span>
+                                <span className="text-xs text-slate-400">&bull;</span>
+                                <span className="text-xs text-slate-500">{day.focus || 'Full Body'}</span>
+                              </div>
+                              <h3 className="text-base sm:text-lg font-bold text-slate-900">{day.dayName}</h3>
                             </div>
-                            <span className="text-xs font-medium text-slate-500">
+                            <span className="inline-flex items-center px-2.5 py-1 rounded text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 self-start sm:self-auto">
                               {(day.exercises || []).length} Prescribed Exercises
                             </span>
                           </div>
 
                           <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse text-sm">
+                            <table className="w-full text-left border-collapse text-xs sm:text-sm">
                               <thead>
-                                <tr className="border-b border-gray-200 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                  <th className="py-2.5 px-3">#</th>
-                                  <th className="py-2.5 px-3">Day</th>
-                                  <th className="py-2.5 px-3">Exercise</th>
-                                  <th className="py-2.5 px-3">Sets</th>
-                                  <th className="py-2.5 px-3">Reps</th>
-                                  <th className="py-2.5 px-3">Rest</th>
+                                <tr className="border-b border-gray-200 bg-slate-50 text-slate-600 font-semibold text-xs uppercase tracking-wider">
+                                  <th className="py-3 px-4 w-12 text-center">#</th>
+                                  <th className="py-3 px-4">Exercise Name</th>
+                                  <th className="py-3 px-4">Sets</th>
+                                  <th className="py-3 px-4">Reps</th>
+                                  <th className="py-3 px-4">Rest Interval</th>
                                 </tr>
                               </thead>
-                              <tbody className="divide-y divide-gray-100">
+                              <tbody className="divide-y divide-gray-100 text-slate-800">
                                 {(day.exercises || []).map((ex, idx) => (
-                                  <tr key={idx} className="hover:bg-slate-50/50">
-                                    <td className="py-2.5 px-3 text-xs font-mono text-slate-400">
+                                  <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
+                                    <td className="py-3 px-4 text-center font-mono text-xs text-slate-400">
                                       {idx + 1}
                                     </td>
-                                    <td className="py-2.5 px-3 text-xs font-semibold text-slate-700">
-                                      Day {day.dayNumber}
+                                    <td className="py-3 px-4 font-semibold text-slate-900">
+                                      <div className="flex items-center space-x-3">
+                                        <ExerciseImage
+                                          exercise={ex}
+                                          name={ex.exerciseName}
+                                          className="w-9 h-9 rounded border border-gray-200 bg-white p-1 object-contain shrink-0"
+                                        />
+                                        <span>{ex.exerciseName}</span>
+                                      </div>
                                     </td>
-                                    <td className="py-2.5 px-3 font-semibold text-slate-900">
-                                      {ex.exerciseName}
+                                    <td className="py-3 px-4">
+                                      <span className="px-2.5 py-1 bg-slate-50 border border-gray-200 rounded text-slate-700 font-semibold text-xs">
+                                        {ex.sets} sets
+                                      </span>
                                     </td>
-                                    <td className="py-2.5 px-3 font-medium text-slate-800">
-                                      {ex.sets}
+                                    <td className="py-3 px-4">
+                                      <span className="px-2.5 py-1 bg-slate-50 border border-gray-200 rounded text-slate-700 font-semibold font-mono text-xs">
+                                        {ex.reps} reps
+                                      </span>
                                     </td>
-                                    <td className="py-2.5 px-3 font-medium text-slate-800">
-                                      {ex.reps}
-                                    </td>
-                                    <td className="py-2.5 px-3 text-xs font-medium text-slate-600">
-                                      {ex.rest || `${ex.restSeconds || 60}s`}
+                                    <td className="py-3 px-4">
+                                      <span className="px-2.5 py-1 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 font-semibold text-xs">
+                                        {ex.rest || `${ex.restSeconds || 60}s`}
+                                      </span>
                                     </td>
                                   </tr>
                                 ))}
@@ -876,7 +1087,7 @@ function TrainerDashboard({ currentUser }) {
                     })()}
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-500 italic">No structured workout plan available for this member.</p>
+                  <p className="text-xs text-slate-500 italic py-4">No structured workout plan available for this member.</p>
                 )}
               </div>
             </>
@@ -907,9 +1118,9 @@ function TrainerDashboard({ currentUser }) {
             Loading workout plans...
           </div>
         ) : plans.length === 0 ? (
-          <div className="py-8 text-center bg-slate-50 border border-gray-200 rounded-md">
-            <p className="text-sm font-semibold text-slate-700">No workout plans in library.</p>
-            <p className="text-xs text-slate-500 mt-1">
+          <div className="py-8 text-center text-xs text-slate-500 bg-slate-50 border border-dashed border-gray-200 rounded-md">
+            <p className="text-sm font-semibold text-slate-700 mb-1">No workout plans in library.</p>
+            <p className="text-xs text-slate-500">
               Click "+ Create New Plan" to build your first template.
             </p>
           </div>
@@ -923,11 +1134,11 @@ function TrainerDashboard({ currentUser }) {
               return (
                 <div
                   key={p._id}
-                  className="p-5 border border-gray-200 rounded-lg bg-white flex flex-col justify-between space-y-4 shadow-xs"
+                  className="p-5 border border-gray-200 rounded-lg bg-white flex flex-col justify-between space-y-4 shadow-sm hover:border-gray-300 transition-colors"
                 >
                   <div>
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <span className="text-xs font-semibold px-2.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
                         {formatText(p.goal)}
                       </span>
                       <span className="text-xs text-slate-500 font-medium">
@@ -935,44 +1146,44 @@ function TrainerDashboard({ currentUser }) {
                       </span>
                     </div>
                     <h3 className="text-base font-bold text-slate-900">{p.name}</h3>
-                    
+
                     {/* Days overview */}
-                    <div className="mt-3 space-y-1.5 border-t border-gray-100 pt-3">
+                    <div className="mt-3 space-y-2 border-t border-gray-100 pt-3">
                       {(p.days || []).map((day, idx) => (
-                        <div key={idx} className="text-xs text-slate-600 flex justify-between">
+                        <div key={idx} className="text-xs text-slate-600 flex justify-between items-center py-0.5">
                           <span className="font-semibold text-slate-800">{day.dayName}</span>
-                          <span className="text-slate-500">{(day.exercises || []).length} exercises</span>
+                          <span className="text-slate-500 text-[11px]">{(day.exercises || []).length} exercises</span>
                         </div>
                       ))}
                     </div>
                   </div>
 
                   {/* Plan Card Actions */}
-                  <div className="flex items-center justify-between pt-3 border-t border-gray-100 gap-2">
+                  <div className="flex flex-wrap items-center justify-between pt-3 border-t border-gray-100 gap-2">
                     {selectedMemberId ? (
                       <button
                         type="button"
                         onClick={() => handleAssignPlan(p._id)}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer"
+                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer"
                       >
                         Assign to {selectedMember?.fullName.split(' ')[0] || 'Member'}
                       </button>
                     ) : (
-                      <span className="text-xs text-slate-400 italic">Select a member to assign</span>
+                      <span className="text-xs text-slate-400 italic">Select a member above to assign</span>
                     )}
 
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => handleOpenEditPlan(p)}
-                        className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-md border border-gray-300 transition-colors cursor-pointer"
+                        className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-md border border-gray-300 shadow-xs transition-colors cursor-pointer"
                       >
                         Edit
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDeletePlan(p._id, p.name)}
-                        className="px-3 py-1.5 bg-white hover:bg-red-50 text-red-600 text-xs font-semibold rounded-md border border-red-200 transition-colors cursor-pointer"
+                        className="px-3 py-1.5 bg-white hover:bg-rose-50 text-rose-600 text-xs font-semibold rounded-md border border-rose-200 shadow-xs transition-colors cursor-pointer"
                       >
                         Delete
                       </button>
@@ -987,8 +1198,8 @@ function TrainerDashboard({ currentUser }) {
 
       {/* MODAL 1: Create / Edit Workout Plan (CRUD) */}
       {isPlanModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 overflow-y-auto">
-          <div className="bg-white border border-gray-200 rounded-lg shadow-lg max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto space-y-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white border border-gray-200 rounded-xl shadow-2xl max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto space-y-6">
             <div className="flex items-center justify-between border-b border-gray-200 pb-3">
               <div>
                 <h3 className="text-lg font-bold text-slate-900">
@@ -1064,7 +1275,7 @@ function TrainerDashboard({ currentUser }) {
                 </div>
 
                 {planFormData.days.map((day, dIdx) => (
-                  <div key={dIdx} className="p-4 bg-slate-50 border border-gray-200 rounded-lg space-y-4">
+                  <div key={dIdx} className="p-4 bg-slate-50/70 border border-gray-200 rounded-lg space-y-4">
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex-1">
                         <label htmlFor={`day-name-${dIdx}`} className="block text-xs font-semibold text-slate-700 mb-1">
@@ -1085,7 +1296,7 @@ function TrainerDashboard({ currentUser }) {
                         <button
                           type="button"
                           onClick={() => handleRemoveDay(dIdx)}
-                          className="mt-5 text-xs text-red-600 hover:text-red-800 font-semibold cursor-pointer"
+                          className="mt-5 text-xs text-rose-600 hover:text-rose-800 font-semibold cursor-pointer"
                         >
                           Remove Day
                         </button>
@@ -1108,15 +1319,15 @@ function TrainerDashboard({ currentUser }) {
                       <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse text-xs">
                           <thead>
-                            <tr className="border-b border-gray-200 text-slate-500 font-semibold uppercase">
-                              <th className="py-2 px-2">Exercise *</th>
-                              <th className="py-2 px-2 w-20">Sets</th>
-                              <th className="py-2 px-2 w-24">Reps</th>
-                              <th className="py-2 px-2 w-24">Rest</th>
-                              <th className="py-2 px-2 w-12 text-center">Action</th>
+                            <tr className="border-b border-gray-200 bg-slate-100/60 text-slate-600 font-semibold uppercase">
+                              <th className="py-2.5 px-2.5">Exercise *</th>
+                              <th className="py-2.5 px-2.5 w-20">Sets</th>
+                              <th className="py-2.5 px-2.5 w-24">Reps</th>
+                              <th className="py-2.5 px-2.5 w-24">Rest</th>
+                              <th className="py-2.5 px-2.5 w-12 text-center">Action</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-gray-200">
+                          <tbody className="divide-y divide-gray-100">
                             {day.exercises.map((ex, exIdx) => (
                               <tr key={exIdx} className="bg-white">
                                 <td className="py-2 px-2">
@@ -1128,7 +1339,7 @@ function TrainerDashboard({ currentUser }) {
                                       handleExerciseChange(dIdx, exIdx, 'exerciseName', e.target.value)
                                     }
                                     placeholder="e.g. Bench Press"
-                                    className="w-full bg-white border border-gray-200 rounded px-2 py-1 text-slate-900 focus:outline-none focus:border-emerald-500"
+                                    className="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-emerald-600"
                                   />
                                 </td>
                                 <td className="py-2 px-2">
@@ -1141,7 +1352,7 @@ function TrainerDashboard({ currentUser }) {
                                     onChange={(e) =>
                                       handleExerciseChange(dIdx, exIdx, 'sets', Number(e.target.value))
                                     }
-                                    className="w-full bg-white border border-gray-200 rounded px-2 py-1 text-slate-900 focus:outline-none focus:border-emerald-500"
+                                    className="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-emerald-600"
                                   />
                                 </td>
                                 <td className="py-2 px-2">
@@ -1153,7 +1364,7 @@ function TrainerDashboard({ currentUser }) {
                                       handleExerciseChange(dIdx, exIdx, 'reps', e.target.value)
                                     }
                                     placeholder="10-12"
-                                    className="w-full bg-white border border-gray-200 rounded px-2 py-1 text-slate-900 focus:outline-none focus:border-emerald-500"
+                                    className="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-emerald-600"
                                   />
                                 </td>
                                 <td className="py-2 px-2">
@@ -1165,7 +1376,7 @@ function TrainerDashboard({ currentUser }) {
                                       handleExerciseChange(dIdx, exIdx, 'rest', e.target.value)
                                     }
                                     placeholder="60s"
-                                    className="w-full bg-white border border-gray-200 rounded px-2 py-1 text-slate-900 focus:outline-none focus:border-emerald-500"
+                                    className="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-emerald-600"
                                   />
                                 </td>
                                 <td className="py-2 px-2 text-center">
@@ -1173,7 +1384,7 @@ function TrainerDashboard({ currentUser }) {
                                     <button
                                       type="button"
                                       onClick={() => handleRemoveExercise(dIdx, exIdx)}
-                                      className="text-red-500 hover:text-red-700 font-bold cursor-pointer"
+                                      className="text-rose-500 hover:text-rose-700 font-bold cursor-pointer text-sm"
                                       title="Remove Exercise"
                                     >
                                       &times;
@@ -1226,8 +1437,8 @@ function TrainerDashboard({ currentUser }) {
 
       {/* MODAL 2: Assign Plan to Selected Member */}
       {isAssignModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-          <div className="bg-white border border-gray-200 rounded-lg shadow-lg max-w-lg w-full p-6 space-y-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <div className="bg-white border border-gray-200 rounded-xl shadow-2xl max-w-lg w-full p-6 space-y-5">
             <div className="flex items-center justify-between border-b border-gray-200 pb-3">
               <div>
                 <h3 className="text-base font-bold text-slate-900">
@@ -1258,9 +1469,9 @@ function TrainerDashboard({ currentUser }) {
                     <div
                       key={p._id}
                       onClick={() => setSelectedPlanToAssign(p._id)}
-                      className={`p-3 border rounded-md cursor-pointer transition-colors flex items-center justify-between ${
+                      className={`p-3 border rounded-lg cursor-pointer transition-colors flex items-center justify-between ${
                         isChecked
-                          ? 'border-emerald-600 bg-emerald-50'
+                          ? 'border-emerald-600 bg-emerald-50/70 shadow-xs ring-1 ring-emerald-500'
                           : 'border-gray-200 bg-white hover:bg-slate-50'
                       }`}
                     >
@@ -1275,7 +1486,7 @@ function TrainerDashboard({ currentUser }) {
                         name="plan-select"
                         checked={isChecked}
                         onChange={() => setSelectedPlanToAssign(p._id)}
-                        className="text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                        className="text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
                       />
                     </div>
                   );

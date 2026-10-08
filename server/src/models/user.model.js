@@ -30,6 +30,16 @@ const userSchema = new mongoose.Schema(
       enum: ['member', 'trainer', 'admin'],
       default: 'member',
       required: true,
+      index: true,
+    },
+    specialization: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    hasLoggedInBefore: {
+      type: Boolean,
+      default: false,
     },
   },
   {
@@ -37,6 +47,7 @@ const userSchema = new mongoose.Schema(
   }
 );
 
+// email already has unique: true which creates the index
 const User = mongoose.models.User || mongoose.model('User', userSchema);
 
 export default User;
